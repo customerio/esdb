@@ -1,18 +1,19 @@
 package esdb
 
 import (
+	"os"
 	"reflect"
 	"testing"
 )
 
-func fetchId(db *Db, id []byte, index string) []*Event {
-	found := make([]*Event, 0)
+func fetchBlockIndex(db *Db, id []byte, index string) []string {
+	found := make([]string, 0)
 
 	block := db.Find(id)
 
 	if block != nil {
-		block.Scan(index, func(event *Event) bool {
-			found = append(found, event)
+		block.ScanIndex(index, func(event *Event) bool {
+			found = append(found, string(event.Data))
 			return true
 		})
 	}
@@ -22,26 +23,39 @@ func fetchId(db *Db, id []byte, index string) []*Event {
 
 var events Events
 
+func createDb() *Db {
+	os.MkdirAll("tmp", 0755)
+	os.Remove("tmp/test.esdb")
+
+	db, _ := Create("tmp/test.esdb")
+	populate(db)
+	db.Finalize()
+
+	db, _ = Open("tmp/test.esdb")
+
+	return db
+}
+
 func populate(db *Db) {
 	events = Events{
-		&Event{Timestamp: 2, Data: []byte("1")},
-		&Event{Timestamp: 3, Data: []byte("2")},
-		&Event{Timestamp: 1, Data: []byte("3")},
-		&Event{Timestamp: 1, Data: []byte("4")},
-		&Event{Timestamp: 1, Data: []byte("5")},
-		&Event{Timestamp: 2, Data: []byte("6")},
+		newEvent(2, []byte("1")),
+		newEvent(3, []byte("2")),
+		newEvent(1, []byte("3")),
+		newEvent(1, []byte("4")),
+		newEvent(1, []byte("5")),
+		newEvent(2, []byte("6")),
 	}
 
-	db.Add([]byte("a"), events[0].Timestamp, events[0].Data, "", []string{"i1", "i2"})
-	db.Add([]byte("a"), events[1].Timestamp, events[1].Data, "", []string{"i2"})
-	db.Add([]byte("a"), events[2].Timestamp, events[2].Data, "", []string{"i1"})
-	db.Add([]byte("b"), events[3].Timestamp, events[3].Data, "i1", []string{""})
-	db.Add([]byte("b"), events[4].Timestamp, events[4].Data, "i1", []string{""})
-	db.Add([]byte("b"), events[5].Timestamp, events[5].Data, "i1", []string{"", "i2"})
+	db.Add([]byte("a"), events[0].Timestamp, events[0].Data, "g", []string{"", "i1", "i2"})
+	db.Add([]byte("a"), events[1].Timestamp, events[1].Data, "h", []string{"", "i2"})
+	db.Add([]byte("a"), events[2].Timestamp, events[2].Data, "i", []string{"", "i1"})
+	db.Add([]byte("b"), events[3].Timestamp, events[3].Data, "g", []string{"", "i1"})
+	db.Add([]byte("b"), events[4].Timestamp, events[4].Data, "h", []string{"", "i1"})
+	db.Add([]byte("b"), events[5].Timestamp, events[5].Data, "i", []string{"", "i1", "i2"})
 }
 
 func TestDbImmutability(t *testing.T) {
-	db, _ := Open("tmp/test.esdb")
+	db := createDb()
 
 	err := db.Add([]byte("b"), 1, []byte("1"), "i1", []string{"", "i2"})
 
@@ -51,26 +65,25 @@ func TestDbImmutability(t *testing.T) {
 }
 
 func TestDbAdd(t *testing.T) {
-	db, _ := Create("tmp/test.esdb")
-	populate(db)
+	db := createDb()
 
 	var tests = []struct {
 		id    string
 		index string
-		want  []*Event
+		want  []string
 	}{
-		{"a", "", []*Event{events[2], events[0], events[1]}},
-		{"a", "i1", []*Event{events[2], events[0]}},
-		{"a", "i2", []*Event{events[0], events[1]}},
-		{"b", "", []*Event{events[3], events[4], events[5]}},
-		{"b", "i1", []*Event{events[3], events[4], events[5]}},
-		{"b", "i2", []*Event{events[5]}},
-		{"b", "i3", []*Event{}},
-		{"c", "", []*Event{}},
+		{"a", "", []string{"3", "1", "2"}},
+		{"a", "i1", []string{"3", "1"}},
+		{"a", "i2", []string{"1", "2"}},
+		{"b", "", []string{"4", "5", "6"}},
+		{"b", "i1", []string{"4", "5", "6"}},
+		{"b", "i2", []string{"6"}},
+		{"b", "i3", []string{}},
+		{"c", "", []string{}},
 	}
 
 	for i, test := range tests {
-		found := fetchId(db, []byte(test.id), test.index)
+		found := fetchBlockIndex(db, []byte(test.id), test.index)
 
 		if !reflect.DeepEqual(test.want, found) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.want, found)

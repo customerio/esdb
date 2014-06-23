@@ -1,35 +1,62 @@
 package esdb
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"os"
+	"sort"
+	"sync"
 )
 
 // Verify(file string) bool
 
-// Open(file string) *Db, error
-// db.Close()
-
-// Create(file string) *Db, error
-// db.Flush(id []byte) error
-// db.Finalize() error
-
 type Db struct {
-	file    *os.File
-	blocks  map[string]*Block
-	written bool
+	file          *os.File
+	blocks        map[string]*Block
+	written       bool
+	offset        int64
+	locations     map[string][]int64
+	calcLocations sync.Once
 }
 
 func Open(path string) (*Db, error) {
-	return &Db{blocks: make(map[string]*Block), written: true}, nil
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Db{
+		file:    file,
+		blocks:  make(map[string]*Block),
+		written: true,
+	}, nil
 }
 
 func Create(path string) (*Db, error) {
-	return &Db{blocks: make(map[string]*Block), written: false}, nil
+	file, err := os.Create(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Db{
+		file:    file,
+		blocks:  make(map[string]*Block),
+		written: false, // to be explicit...
+	}, nil
 }
 
 func (db *Db) Find(id []byte) *Block {
-	return db.blocks[string(id)]
+	if loc := db.findBlockLocation(id); loc != nil {
+		return newBlock(
+			db.file,
+			id,
+			loc[0],
+			loc[1],
+		)
+	}
+
+	return nil
 }
 
 func (db *Db) Close() {
@@ -46,33 +73,30 @@ func (db *Db) Add(id []byte, timestamp int, data []byte, index string, secondari
 	block := db.blocks[string(id)]
 
 	if block == nil {
-		block = createBlock(db.file, id, index)
+		block = createBlock(db.file, id)
 		db.blocks[string(id)] = block
 	}
 
-	if block.primary != index {
-		return errors.New(`Primary index for this block is '" +
-			block.primary +
-			'". This event has a primary index of '" +
-			index + "'. Cannot have multiple primary indexes." +
-			"Move one to a secondary index.`)
-	}
-
-	return block.add(timestamp, data, append(secondaries, index))
+	return block.add(timestamp, data, index, secondaries)
 }
 
-func (db *Db) Flush(id []byte) error {
+func (db *Db) Flush(id []byte) (err error) {
 	if block := db.blocks[string(id)]; block != nil {
-		return block.write()
+		err = block.write()
+		block.offset = db.offset
+		db.offset += block.length
 	}
 
-	return nil
+	return
 }
 
-func (db *Db) Finalize() error {
+func (db *Db) Finalize() (err error) {
 	for _, block := range db.blocks {
-		if err := block.write(); err != nil {
-			return err
+		if err = block.write(); err == nil {
+			block.offset = db.offset
+			db.offset += block.length
+		} else {
+			return
 		}
 	}
 
@@ -82,7 +106,68 @@ func (db *Db) Finalize() error {
 func (db *Db) write() error {
 	db.written = true
 
-	// write block index lookup sst
+	buf := new(bytes.Buffer)
 
-	return nil
+	blocks := make(sort.StringSlice, 0)
+	offsets := make(map[string]int64)
+	lengths := make(map[string]int64)
+
+	for _, block := range db.blocks {
+		blocks = append(blocks, string(block.Id))
+		offsets[string(block.Id)] = block.offset
+		lengths[string(block.Id)] = block.length
+	}
+
+	blocks.Sort()
+
+	for _, block := range blocks {
+		buf.Write(varInt(len(block)))
+		buf.Write([]byte(block))
+		binary.Write(buf, binary.LittleEndian, offsets[block])
+		binary.Write(buf, binary.LittleEndian, lengths[block])
+	}
+
+	binary.Write(buf, binary.LittleEndian, int64(buf.Len()))
+
+	_, err := buf.WriteTo(db.file)
+
+	return err
+}
+
+func (db *Db) findBlockLocation(id []byte) []int64 {
+	if db.locations == nil {
+		db.calcLocations.Do(func() {
+			db.file.Seek(-8, 2)
+
+			var indexLength int64
+			binary.Read(db.file, binary.LittleEndian, &indexLength)
+
+			db.file.Seek(-8-indexLength, 2)
+
+			indexes := make([]byte, indexLength)
+			db.file.Read(indexes)
+
+			db.locations = make(map[string][]int64)
+
+			for index := 0; index < len(indexes); {
+				idLen, n := binary.Uvarint(indexes[index:])
+				index += n
+
+				id := string(indexes[index : index+int(idLen)])
+				index += int(idLen)
+
+				var offset int64
+				binary.Read(bytes.NewReader(indexes[index:index+8]), binary.LittleEndian, &offset)
+				index += 8
+
+				var length int64
+				binary.Read(bytes.NewReader(indexes[index:index+8]), binary.LittleEndian, &length)
+				index += 8
+
+				db.locations[id] = []int64{offset, length}
+			}
+		})
+	}
+
+	return db.locations[string(id)]
 }
