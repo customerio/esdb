@@ -48,11 +48,7 @@ func (w *Writer) Add(id []byte, timestamp int, data []byte, index string, second
 
 func (w *Writer) Flush(id []byte) (err error) {
 	if block := w.blocks[string(id)]; block != nil {
-		if length, err := block.write(); err == nil {
-			w.blockOffsets[string(id)] = w.offset
-			w.blockLengths[string(id)] = length
-			w.offset += length
-		}
+		err = w.writeBlock(block)
 	}
 
 	return
@@ -60,12 +56,8 @@ func (w *Writer) Flush(id []byte) (err error) {
 
 func (w *Writer) Finalize() (err error) {
 	for _, block := range w.blocks {
-		if length, err := block.write(); err == nil {
-			w.blockOffsets[string(block.Id)] = w.offset
-			w.blockLengths[string(block.Id)] = length
-			w.offset += length
-		} else {
-			return err
+		if err = w.writeBlock(block); err != nil {
+			return
 		}
 	}
 
@@ -97,4 +89,16 @@ func (w *Writer) write() error {
 	_, err := buf.WriteTo(w.file)
 
 	return err
+}
+
+func (w *Writer) writeBlock(block *blockWriter) (err error) {
+	length, err := block.write()
+
+	if err == nil {
+		w.blockOffsets[string(block.Id)] = w.offset
+		w.blockLengths[string(block.Id)] = length
+		w.offset += length
+	}
+
+	return
 }
