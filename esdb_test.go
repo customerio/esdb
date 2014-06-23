@@ -32,7 +32,7 @@ func createDb() *Db {
 		println(err.Error())
 	}
 	populate(w)
-	err = w.Finalize()
+	err = w.Write()
 	if err != nil {
 		println(err.Error())
 	}

@@ -56,7 +56,7 @@ func (w *Writer) Flush(id []byte) (err error) {
 	return
 }
 
-func (w *Writer) Finalize() (err error) {
+func (w *Writer) Write() (err error) {
 	for _, block := range w.blocks {
 		if err = w.writeBlock(block); err != nil {
 			return

@@ -9,7 +9,7 @@ func TestWriterImmutability(t *testing.T) {
 	os.MkdirAll("tmp", 0755)
 	os.Remove("tmp/test.esdb")
 	w, _ := New("tmp/test.esdb")
-	w.Finalize()
+	w.Write()
 
 	err := w.Add([]byte("b"), 1, []byte("1"), "i1", []string{"", "i2"})
 
