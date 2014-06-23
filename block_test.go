@@ -8,14 +8,14 @@ import (
 
 func create(id []byte) *Block {
 	buffer := bytes.NewBuffer([]byte{})
-	block := createBlock(buffer, []byte("a"))
-	populateBlock(block)
-	block.write()
+	writer := newBlock(buffer, []byte("a"))
+	populateBlock(writer)
+	writer.write()
 
-	return newBlock(bytes.NewReader(buffer.Bytes()), []byte("a"), 0, int64(buffer.Len()))
+	return block(bytes.NewReader(buffer.Bytes()), []byte("a"), 0, int64(buffer.Len()))
 }
 
-func populateBlock(block *Block) {
+func populateBlock(block *blockWriter) {
 	events = Events{
 		newEvent(2, []byte("1")),
 		newEvent(3, []byte("2")),
@@ -55,16 +55,6 @@ func fetchIndex(block *Block, index string, reverse bool) []string {
 	})
 
 	return found
-}
-
-func TestBlockImmutability(t *testing.T) {
-	block := newBlock(nil, []byte("a"), 0, 100)
-
-	err := block.add(1, []byte("1"), "b", []string{"", "i2"})
-
-	if err == nil || err.Error() != "Cannot add to block. We're immutable and this one has already been written." {
-		t.Errorf("Failed to throw error when adding events to a written block")
-	}
 }
 
 func TestBlockIndexScanning(t *testing.T) {

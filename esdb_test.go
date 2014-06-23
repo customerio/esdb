@@ -27,16 +27,25 @@ func createDb() *Db {
 	os.MkdirAll("tmp", 0755)
 	os.Remove("tmp/test.esdb")
 
-	db, _ := Create("tmp/test.esdb")
-	populate(db)
-	db.Finalize()
+	w, err := New("tmp/test.esdb")
+	if err != nil {
+		println(err.Error())
+	}
+	populate(w)
+	err = w.Finalize()
+	if err != nil {
+		println(err.Error())
+	}
 
-	db, _ = Open("tmp/test.esdb")
+	db, err := Open("tmp/test.esdb")
+	if err != nil {
+		println(err.Error())
+	}
 
 	return db
 }
 
-func populate(db *Db) {
+func populate(w *Writer) {
 	events = Events{
 		newEvent(2, []byte("1")),
 		newEvent(3, []byte("2")),
@@ -46,25 +55,15 @@ func populate(db *Db) {
 		newEvent(2, []byte("6")),
 	}
 
-	db.Add([]byte("a"), events[0].Timestamp, events[0].Data, "g", []string{"", "i1", "i2"})
-	db.Add([]byte("a"), events[1].Timestamp, events[1].Data, "h", []string{"", "i2"})
-	db.Add([]byte("a"), events[2].Timestamp, events[2].Data, "i", []string{"", "i1"})
-	db.Add([]byte("b"), events[3].Timestamp, events[3].Data, "g", []string{"", "i1"})
-	db.Add([]byte("b"), events[4].Timestamp, events[4].Data, "h", []string{"", "i1"})
-	db.Add([]byte("b"), events[5].Timestamp, events[5].Data, "i", []string{"", "i1", "i2"})
+	w.Add([]byte("a"), events[0].Timestamp, events[0].Data, "g", []string{"", "i1", "i2"})
+	w.Add([]byte("a"), events[1].Timestamp, events[1].Data, "h", []string{"", "i2"})
+	w.Add([]byte("a"), events[2].Timestamp, events[2].Data, "i", []string{"", "i1"})
+	w.Add([]byte("b"), events[3].Timestamp, events[3].Data, "g", []string{"", "i1"})
+	w.Add([]byte("b"), events[4].Timestamp, events[4].Data, "h", []string{"", "i1"})
+	w.Add([]byte("b"), events[5].Timestamp, events[5].Data, "i", []string{"", "i1", "i2"})
 }
 
-func TestDbImmutability(t *testing.T) {
-	db := createDb()
-
-	err := db.Add([]byte("b"), 1, []byte("1"), "i1", []string{"", "i2"})
-
-	if err == nil || err.Error() != "Cannot add to database. We're immutable and this one has already been written." {
-		t.Errorf("Failed to throw error when adding events to a written database")
-	}
-}
-
-func TestDbAdd(t *testing.T) {
+func TestBlockIndexes(t *testing.T) {
 	db := createDb()
 
 	var tests = []struct {
