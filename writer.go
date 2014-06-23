@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"sort"
+
+	"github.com/customerio/esdb/sst"
 )
 
 type Writer struct {
@@ -77,17 +79,25 @@ func (w *Writer) write() error {
 
 	blocks.Sort()
 
+	st := sst.NewWriter(buf)
+
 	for _, block := range blocks {
-		buf.Write(varInt(len(block)))
-		buf.Write([]byte(block))
-		binary.Write(buf, binary.LittleEndian, w.blockOffsets[block])
-		binary.Write(buf, binary.LittleEndian, w.blockLengths[block])
+		b := new(bytes.Buffer)
+
+		binary.Write(b, binary.LittleEndian, w.blockOffsets[block])
+		binary.Write(b, binary.LittleEndian, w.blockLengths[block])
+
+		if err := st.Set([]byte(block), b.Bytes()); err != nil {
+			return err
+		}
+	}
+
+	if err := st.Close(); err != nil {
+		return err
 	}
 
 	binary.Write(buf, binary.LittleEndian, int64(buf.Len()))
-
 	_, err := buf.WriteTo(w.file)
-
 	return err
 }
 

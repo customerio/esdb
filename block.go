@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"io"
 	"sync"
+
+	"github.com/customerio/esdb/sst"
 )
 
 type Scanner func(*Event) bool
@@ -15,32 +17,41 @@ type Block struct {
 	reader      io.ReadSeeker
 	offset      int64
 	length      int64
+	index       *sst.Reader
 	offsets     map[string][]int64
 	calcOffsets sync.Once
 }
 
 func block(reader io.ReadSeeker, id []byte, offset, length int64) *Block {
+	st, err := findBlockIndex(reader, offset, length)
+	if err != nil {
+		return nil
+	}
+
 	return &Block{
 		Id:     id,
 		reader: reader,
+		index:  st,
 		offset: offset,
 		length: length,
 	}
 }
 
 func (b *Block) Scan(group string, scanner Scanner) error {
-	offset := b.offset + b.findIndexOffsets("g" + group)[0]
-
-	b.reader.Seek(offset, 0)
-	data := eventData(b.reader)
-	offset += int64(len(data) + 1)
-
-	for event := decodeEvent(data); event != nil; event = decodeEvent(data) {
-		scanner(event)
+	if off := b.firstIndexOffset("g" + group); off > 0 {
+		offset := b.offset + off
 
 		b.reader.Seek(offset, 0)
-		data = eventData(b.reader)
+		data := eventData(b.reader)
 		offset += int64(len(data) + 1)
+
+		for event := decodeEvent(data); event != nil; event = decodeEvent(data) {
+			scanner(event)
+
+			b.reader.Seek(offset, 0)
+			data = eventData(b.reader)
+			offset += int64(len(data) + 1)
+		}
 	}
 
 	return nil
@@ -64,8 +75,8 @@ func eventData(reader io.ReadSeeker) []byte {
 }
 
 func (b *Block) ScanIndex(index string, scanner Scanner) error {
-	if offsets := b.findIndexOffsets("i" + index); offsets != nil {
-		offset := b.offset + offsets[0]
+	if off := b.firstIndexOffset("i" + index); off > 0 {
+		offset := b.offset + off
 
 		b.reader.Seek(offset, 0)
 
@@ -88,8 +99,8 @@ func (b *Block) ScanIndex(index string, scanner Scanner) error {
 }
 
 func (b *Block) RevScanIndex(index string, scanner Scanner) error {
-	if offsets := b.findIndexOffsets("i" + index); offsets != nil {
-		offset := b.offset + offsets[1]
+	if off := b.lastIndexOffset("i" + index); off > 0 {
+		offset := b.offset + off
 
 		b.reader.Seek(offset, 0)
 		data := eventData(b.reader)
@@ -110,40 +121,37 @@ func (b *Block) RevScanIndex(index string, scanner Scanner) error {
 	return nil
 }
 
+func (b *Block) firstIndexOffset(index string) int64 {
+	return b.findIndexOffsets(index)[0]
+}
+
+func (b *Block) lastIndexOffset(index string) int64 {
+	return b.findIndexOffsets(index)[1]
+}
+
 func (b *Block) findIndexOffsets(index string) []int64 {
-	if b.offsets == nil {
-		b.calcOffsets.Do(func() {
-			b.reader.Seek(b.offset+b.length-4, 0)
+	if offsets, err := b.index.Get([]byte(index)); err == nil {
+		var startOffset int64
+		binary.Read(bytes.NewReader(offsets[:8]), binary.LittleEndian, &startOffset)
 
-			var indexLength int32
-			binary.Read(b.reader, binary.LittleEndian, &indexLength)
+		var stopOffset int64
+		binary.Read(bytes.NewReader(offsets[8:]), binary.LittleEndian, &stopOffset)
 
-			b.reader.Seek(b.offset+b.length-4-int64(indexLength), 0)
-
-			indexes := make([]byte, indexLength)
-			b.reader.Read(indexes)
-
-			b.offsets = make(map[string][]int64)
-
-			for index := 0; index < len(indexes); {
-				nameLen, n := binary.Uvarint(indexes[index:])
-				index += n
-
-				name := string(indexes[index : index+int(nameLen)])
-				index += int(nameLen)
-
-				var startOffset int64
-				binary.Read(bytes.NewReader(indexes[index:index+8]), binary.LittleEndian, &startOffset)
-				index += 8
-
-				var stopOffset int64
-				binary.Read(bytes.NewReader(indexes[index:index+8]), binary.LittleEndian, &stopOffset)
-				index += 8
-
-				b.offsets[name] = []int64{startOffset, stopOffset}
-			}
-		})
+		return []int64{startOffset, stopOffset}
 	}
 
-	return b.offsets[index]
+	return []int64{0, 0}
+}
+
+func findBlockIndex(r io.ReadSeeker, offset, length int64) (*sst.Reader, error) {
+	r.Seek(offset+length-4, 0)
+
+	var indexLength int32
+	binary.Read(r, binary.LittleEndian, &indexLength)
+
+	r.Seek(offset+length-4-int64(indexLength), 0)
+	index := make([]byte, indexLength)
+	r.Read(index)
+
+	return sst.NewReader(bytes.NewReader(index), int64(indexLength))
 }

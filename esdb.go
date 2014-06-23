@@ -5,12 +5,15 @@ import (
 	"encoding/binary"
 	"os"
 	"sync"
+
+	"github.com/customerio/esdb/sst"
 )
 
 // Verify(file string) bool
 
 type Db struct {
 	file          *os.File
+	index         *sst.Reader
 	locations     map[string][]int64
 	calcLocations sync.Once
 }
@@ -21,13 +24,20 @@ func Open(path string) (*Db, error) {
 		return nil, err
 	}
 
+	st, err := findIndex(file)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Db{
-		file: file,
+		file:  file,
+		index: st,
 	}, nil
 }
 
 func (db *Db) Find(id []byte) *Block {
-	if loc := db.findBlockLocation(id); loc != nil {
+	if location, err := db.index.Get(id); err == nil {
+		loc := readLocation(location)
 		return block(
 			db.file,
 			id,
@@ -45,40 +55,24 @@ func (db *Db) Close() {
 	}
 }
 
-func (db *Db) findBlockLocation(id []byte) []int64 {
-	if db.locations == nil {
-		db.calcLocations.Do(func() {
-			db.file.Seek(-8, 2)
+func findIndex(f *os.File) (*sst.Reader, error) {
+	f.Seek(-8, 2)
 
-			var indexLength int64
-			binary.Read(db.file, binary.LittleEndian, &indexLength)
+	var indexLength int64
+	binary.Read(f, binary.LittleEndian, &indexLength)
 
-			db.file.Seek(-8-indexLength, 2)
+	f.Seek(-8-indexLength, 2)
+	index := make([]byte, indexLength)
+	f.Read(index)
 
-			indexes := make([]byte, indexLength)
-			db.file.Read(indexes)
+	return sst.NewReader(bytes.NewReader(index), indexLength)
+}
 
-			db.locations = make(map[string][]int64)
+func readLocation(data []byte) []int64 {
+	var offset, length int64
 
-			for index := 0; index < len(indexes); {
-				idLen, n := binary.Uvarint(indexes[index:])
-				index += n
+	binary.Read(bytes.NewReader(data[:8]), binary.LittleEndian, &offset)
+	binary.Read(bytes.NewReader(data[8:]), binary.LittleEndian, &length)
 
-				id := string(indexes[index : index+int(idLen)])
-				index += int(idLen)
-
-				var offset int64
-				binary.Read(bytes.NewReader(indexes[index:index+8]), binary.LittleEndian, &offset)
-				index += 8
-
-				var length int64
-				binary.Read(bytes.NewReader(indexes[index:index+8]), binary.LittleEndian, &length)
-				index += 8
-
-				db.locations[id] = []int64{offset, length}
-			}
-		})
-	}
-
-	return db.locations[string(id)]
+	return []int64{offset, length}
 }
