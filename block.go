@@ -42,22 +42,28 @@ func (b *Block) Scan(group string, scanner Scanner) error {
 		offset := b.offset + off
 
 		b.reader.Seek(offset, 0)
-		data := eventData(b.reader)
-		offset += int64(len(data) + 1)
+		data := make([]byte, 100)
+		b.reader.Read(data)
+
+		b.reader.Seek(offset, 0)
+		data, off := eventData(b.reader)
+		offset += off
 
 		for event := decodeEvent(data); event != nil; event = decodeEvent(data) {
-			scanner(event)
+			if !scanner(event) {
+				return nil
+			}
 
 			b.reader.Seek(offset, 0)
-			data = eventData(b.reader)
-			offset += int64(len(data) + 1)
+			data, off = eventData(b.reader)
+			offset += off
 		}
 	}
 
 	return nil
 }
 
-func eventData(reader io.ReadSeeker) []byte {
+func eventData(reader io.ReadSeeker) ([]byte, int64) {
 	data := make([]byte, 1000)
 	reader.Read(data)
 
@@ -69,9 +75,9 @@ func eventData(reader io.ReadSeeker) []byte {
 		data = append(data, extra...)
 	}
 
-	data = data[n : eventLen+1]
+	data = data[n : uint64(n)+eventLen]
 
-	return data
+	return data, int64(n + len(data))
 }
 
 func (b *Block) ScanIndex(index string, scanner Scanner) error {
@@ -80,15 +86,17 @@ func (b *Block) ScanIndex(index string, scanner Scanner) error {
 
 		b.reader.Seek(offset, 0)
 
-		data := eventData(b.reader)
+		data, _ := eventData(b.reader)
 
 		for event := decodeEvent(data); event != nil; event = decodeEvent(data) {
-			scanner(event)
+			if !scanner(event) {
+				return nil
+			}
 
 			if next := event.nextOffsets[index]; next > 0 {
 				offset = b.offset + next
 				b.reader.Seek(offset, 0)
-				data = eventData(b.reader)
+				data, _ = eventData(b.reader)
 			} else {
 				data = []byte{}
 			}
@@ -103,15 +111,17 @@ func (b *Block) RevScanIndex(index string, scanner Scanner) error {
 		offset := b.offset + off
 
 		b.reader.Seek(offset, 0)
-		data := eventData(b.reader)
+		data, _ := eventData(b.reader)
 
 		for event := decodeEvent(data); event != nil; event = decodeEvent(data) {
-			scanner(event)
+			if !scanner(event) {
+				return nil
+			}
 
 			if prev := event.prevOffsets[index]; prev > 0 {
 				offset = b.offset + prev
 				b.reader.Seek(offset, 0)
-				data = eventData(b.reader)
+				data, _ = eventData(b.reader)
 			} else {
 				data = []byte{}
 			}

@@ -1,6 +1,8 @@
 package esdb
 
 import (
+	"encoding/csv"
+	"math/rand"
 	"os"
 	"reflect"
 	"testing"
@@ -87,5 +89,107 @@ func TestBlockIndexes(t *testing.T) {
 		if !reflect.DeepEqual(test.want, found) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.want, found)
 		}
+	}
+}
+
+func fetch100RowColumns(file string, index int) []string {
+	f, _ := os.Open("testdata/million_visits.csv")
+	c := csv.NewReader(f)
+
+	columns := make([]string, 100)
+
+	for i := 0; i < 100; i++ {
+		row, err := c.Read()
+		if err != nil {
+			panic(err)
+		}
+
+		// third column is city, which
+		// is an index in our test file.
+		columns[i] = row[index]
+	}
+
+	return columns
+}
+
+func BenchmarkMillionEventDbScanSingle(b *testing.B) {
+	// csv index 1 is host, which is the grouping in our test file.
+	hosts := fetch100RowColumns("testdata/million_visits.csv", 1)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db, err := Open("testdata/million_visits.esdb")
+		if err != nil {
+			panic(err)
+		}
+
+		host := hosts[rand.Intn(100)]
+		db.Find([]byte("visit")).Scan(host, func(e *Event) bool {
+			return false
+		})
+	}
+}
+
+func BenchmarkMillionEventDbScanIndexSingle(b *testing.B) {
+	// csv index 2 is city, which is an index in our test file.
+	cities := fetch100RowColumns("testdata/million_visits.csv", 2)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db, err := Open("testdata/million_visits.esdb")
+		if err != nil {
+			panic(err)
+		}
+
+		city := cities[rand.Intn(100)]
+		db.Find([]byte("visit")).ScanIndex(city, func(e *Event) bool {
+			return false
+		})
+	}
+}
+
+func BenchmarkMillionEventDbScan500(b *testing.B) {
+	// csv index 1 is host, which is the grouping in our test file.
+	hosts := fetch100RowColumns("testdata/million_visits.csv", 1)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db, err := Open("testdata/million_visits.esdb")
+		if err != nil {
+			panic(err)
+		}
+
+		count := 0
+
+		host := hosts[rand.Intn(100)]
+		db.Find([]byte("visit")).Scan(host, func(e *Event) bool {
+			count += 1
+			return count < 500
+		})
+	}
+}
+
+func BenchmarkMillionEventDbScanIndex500(b *testing.B) {
+	// csv index 2 is city, which is an index in our test file.
+	cities := fetch100RowColumns("testdata/million_visits.csv", 2)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db, err := Open("testdata/million_visits.esdb")
+		if err != nil {
+			panic(err)
+		}
+
+		count := 0
+
+		city := cities[rand.Intn(100)]
+		db.Find([]byte("visit")).ScanIndex(city, func(e *Event) bool {
+			count += 1
+			return count < 500
+		})
 	}
 }

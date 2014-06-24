@@ -104,7 +104,17 @@ func (w *blockWriter) writeEvents(buf io.Writer) error {
 
 	offset = 1
 
-	for _, events := range w.groups {
+	groups := make(sort.StringSlice, 0, len(w.groups))
+
+	for group, _ := range w.groups {
+		groups = append(groups, group)
+	}
+
+	groups.Sort()
+
+	for _, group := range groups {
+		events := w.groups[group]
+
 		sort.Stable(sort.Reverse(events))
 
 		for _, event := range events {
@@ -115,7 +125,9 @@ func (w *blockWriter) writeEvents(buf io.Writer) error {
 		offset += 1
 	}
 
-	for _, events := range w.groups {
+	for _, group := range groups {
+		events := w.groups[group]
+
 		for _, event := range events {
 			if _, err := buf.Write(event.encode()); err != nil {
 				return err
