@@ -36,7 +36,7 @@ func (b *Block) Scan(group string, scanner Scanner) error {
 	if off := b.firstIndexOffset("g" + group); off > 0 {
 		offset := b.offset + off
 
-		b.buf.Move(offset)
+		b.buf.Move(offset, 4096)
 
 		data := eventData(b.buf)
 
@@ -60,7 +60,7 @@ func (b *Block) ScanIndex(index string, scanner Scanner) error {
 	if off := b.firstIndexOffset("i" + index); off > 0 {
 		offset := b.offset + off
 
-		b.buf.Move(offset)
+		b.buf.Move(offset, 0)
 
 		data := eventData(b.buf)
 
@@ -71,7 +71,7 @@ func (b *Block) ScanIndex(index string, scanner Scanner) error {
 
 			if next := event.nextOffsets[index]; next > 0 {
 				offset = b.offset + next
-				b.buf.Move(offset)
+				b.buf.Move(offset, 0)
 				data = eventData(b.buf)
 			} else {
 				data = []byte{}
@@ -86,7 +86,7 @@ func (b *Block) RevScanIndex(index string, scanner Scanner) error {
 	if off := b.lastIndexOffset("i" + index); off > 0 {
 		offset := b.offset + off
 
-		b.buf.Move(offset)
+		b.buf.Move(offset, 0)
 		data := eventData(b.buf)
 
 		for event := decodeEvent(data); event != nil; event = decodeEvent(data) {
@@ -96,7 +96,7 @@ func (b *Block) RevScanIndex(index string, scanner Scanner) error {
 
 			if prev := event.prevOffsets[index]; prev > 0 {
 				offset = b.offset + prev
-				b.buf.Move(offset)
+				b.buf.Move(offset, 0)
 				data = eventData(b.buf)
 			} else {
 				data = []byte{}

@@ -26,15 +26,15 @@ func (b *buffer) Reset() {
 	b.Buffer.Reset()
 }
 
-func (b *buffer) Move(start uint64) {
+func (b *buffer) Move(start uint64, pageSize int) {
 	b.start = start
 	b.offset = 0
+	b.pageSize = pageSize
 	b.Buffer.Reset()
 }
 
 func (b *buffer) Next(n int) []byte {
 	b.ensure(n)
-
 	b.offset += uint64(n)
 
 	if b.offset > b.limit {
@@ -65,12 +65,18 @@ func (b *buffer) Uint64() uint64 {
 }
 
 func (b *buffer) ensure(num int) {
+	request := b.pageSize
+
+	if num > request {
+		request = num
+	}
+
 	for b.Len() < num && b.offset < b.limit-b.start {
-		b.ReadFrom(b.nextBlock())
+		b.ReadFrom(b.nextBlock(request))
 	}
 }
 
-func (b *buffer) nextBlock() io.Reader {
+func (b *buffer) nextBlock(requested int) io.Reader {
 	start := b.start + b.offset + uint64(b.Len())
 
 	if start > b.limit {
@@ -79,7 +85,7 @@ func (b *buffer) nextBlock() io.Reader {
 
 	b.reader.Seek(int64(start), 0)
 
-	length := uint64(b.pageSize)
+	length := uint64(requested)
 
 	if b.offset+length > b.limit-b.start {
 		length = (b.limit - b.start) - b.offset

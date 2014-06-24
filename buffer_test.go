@@ -75,7 +75,7 @@ func TestMoveAndResetSmallBuffer(t *testing.T) {
 		}
 	}
 
-	buf.Move(8)
+	buf.Move(8, 2)
 
 	for _, expected := range []uint32{3, 4, 0} {
 		if found := buf.Uint32(); found != expected {
@@ -83,7 +83,7 @@ func TestMoveAndResetSmallBuffer(t *testing.T) {
 		}
 	}
 
-	buf.Move(4)
+	buf.Move(4, 2)
 
 	for _, expected := range []uint32{2, 3, 4, 0} {
 		if found := buf.Uint32(); found != expected {
@@ -116,7 +116,7 @@ func TestMoveAndResetBigBuffer(t *testing.T) {
 		}
 	}
 
-	buf.Move(8)
+	buf.Move(8, 32)
 
 	for _, expected := range []uint32{3, 4, 0} {
 		if found := buf.Uint32(); found != expected {
@@ -124,7 +124,7 @@ func TestMoveAndResetBigBuffer(t *testing.T) {
 		}
 	}
 
-	buf.Move(4)
+	buf.Move(4, 32)
 
 	for _, expected := range []uint32{2, 3, 4, 0} {
 		if found := buf.Uint32(); found != expected {
@@ -142,7 +142,7 @@ func TestMoveAndResetBigBuffer(t *testing.T) {
 
 	buf = newBuffer(r, 0, 12, 12)
 
-	buf.Move(4)
+	buf.Move(4, 12)
 
 	for _, expected := range []uint32{2, 3, 0, 0} {
 		if found := buf.Uint32(); found != expected {
