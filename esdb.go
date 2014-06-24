@@ -68,11 +68,11 @@ func findIndex(f *os.File) (*sst.Reader, error) {
 	return sst.NewReader(bytes.NewReader(index), indexLength)
 }
 
-func readLocation(data []byte) []int64 {
-	var offset, length int64
+func readLocation(data []byte) []uint64 {
+	var offset, length uint64
 
 	binary.Read(bytes.NewReader(data[:8]), binary.LittleEndian, &offset)
 	binary.Read(bytes.NewReader(data[8:]), binary.LittleEndian, &length)
 
-	return []int64{offset, length}
+	return []uint64{offset, length}
 }

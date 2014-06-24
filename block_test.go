@@ -12,7 +12,7 @@ func create(id []byte) *Block {
 	populateBlock(writer)
 	writer.write()
 
-	return block(bytes.NewReader(buffer.Bytes()), []byte("a"), 0, int64(buffer.Len()))
+	return block(bytes.NewReader(buffer.Bytes()), []byte("a"), 0, uint64(buffer.Len()))
 }
 
 func populateBlock(block *blockWriter) {

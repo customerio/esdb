@@ -15,8 +15,8 @@ type Event struct {
 	Data      []byte
 	Timestamp int
 
-	prevOffsets map[string]int64
-	nextOffsets map[string]int64
+	prevOffsets map[string]uint64
+	nextOffsets map[string]uint64
 
 	offset int64
 	prev   map[string]*Event
@@ -42,7 +42,7 @@ func decodeEvent(encoded []byte) *Event {
 	data := encoded[index : index+int(dataLen)]
 	index += int(dataLen)
 
-	event := &Event{Data: data, prevOffsets: make(map[string]int64), nextOffsets: make(map[string]int64)}
+	event := &Event{Data: data, prevOffsets: make(map[string]uint64), nextOffsets: make(map[string]uint64)}
 
 	var indexLen uint8
 	binary.Read(bytes.NewReader(encoded[index:index+1]), binary.LittleEndian, &indexLen)
@@ -55,8 +55,8 @@ func decodeEvent(encoded []byte) *Event {
 		name := string(encoded[index : index+int(nameLen)])
 		index += int(nameLen)
 
-		var prev int64
-		var next int64
+		var prev uint64
+		var next uint64
 		binary.Read(bytes.NewReader(encoded[index:index+8]), binary.LittleEndian, &prev)
 		index += 8
 		binary.Read(bytes.NewReader(encoded[index:index+8]), binary.LittleEndian, &next)
