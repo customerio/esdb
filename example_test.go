@@ -31,10 +31,12 @@ func ExampleDb() {
 		event{"3", 1403534923, "page", map[string]string{"url": "http://mysite.com/thankyou"}},
 	}
 
-	// In case we've already created the file.
-	os.Remove("activity.esdb")
+	os.MkdirAll("tmp", 0755)
 
-	writer, err := New("activity.esdb")
+	// In case we've already created the file.
+	os.Remove("tmp/activity.esdb")
+
+	writer, err := New("tmp/activity.esdb")
 	if err != nil {
 		panic(err)
 	}
@@ -56,7 +58,7 @@ func ExampleDb() {
 		panic(err)
 	}
 
-	db, err := Open("activity.esdb")
+	db, err := Open("tmp/activity.esdb")
 	if err != nil {
 		panic(err)
 	}
