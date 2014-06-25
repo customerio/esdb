@@ -18,12 +18,6 @@ type Block struct {
 	index  *sst.Reader
 }
 
-type index struct {
-	key   uint64
-	first uint64
-	last  uint64
-}
-
 func openBlock(reader io.ReadSeeker, id []byte, offset, length uint64) *Block {
 	if st, err := findBlockIndex(reader, offset, length); err == nil {
 		return &Block{
@@ -38,64 +32,63 @@ func openBlock(reader io.ReadSeeker, id []byte, offset, length uint64) *Block {
 }
 
 func (b *Block) Scan(grouping string, scanner Scanner) {
-	if index := b.findIndex("g" + grouping); index != nil {
-		b.scan(index.first, 0, 4096, scanner, false)
+	if offset := b.findGroupingOffset(grouping); offset > 0 {
+		b.buf.Move(b.offset+offset, 4096)
+
+		for event := nextEvent(b.buf); event != nil; {
+			if !scanner(event) {
+				return
+			}
+
+			event = nextEvent(b.buf)
+		}
 	}
 }
 
 func (b *Block) ScanIndex(name, value string, scanner Scanner) {
-	if index := b.findIndex("i" + name + ":" + value); index != nil {
-		b.scan(index.first, index.key, 0, scanner, false)
+	if buf := b.findIndex(name, value); buf != nil {
+		for offset := buf.PullUint64(); offset > 0; {
+			b.buf.Move(b.offset+offset, 0)
+
+			if !scanner(nextEvent(b.buf)) {
+				return
+			}
+
+			offset = buf.PullUint64()
+		}
 	}
 }
 
 func (b *Block) RevScanIndex(name, value string, scanner Scanner) {
-	if index := b.findIndex("i" + name + ":" + value); index != nil {
-		b.scan(index.last, index.key, 0, scanner, true)
-	}
-}
+	if buf := b.findIndex(name, value); buf != nil {
+		for offset := buf.PopUint64(); offset > 0; {
+			b.buf.Move(b.offset+offset, 0)
 
-func (b *Block) scan(offset, key uint64, pageSize int, scanner Scanner, reverse bool) {
-	if offset == 0 {
-		return
-	}
-
-	b.buf.Move(b.offset+offset, pageSize)
-
-	for event := nextEvent(b.buf); event != nil; {
-		if scanner(event) {
-			if reverse {
-				event = event.Prev(b.buf, key)
-			} else {
-				event = event.Next(b.buf, key)
+			if !scanner(nextEvent(b.buf)) {
+				return
 			}
 
-		} else {
-			return
+			offset = buf.PopUint64()
 		}
 	}
 }
 
-func (b *Block) findIndex(name string) *index {
-	if metadata, err := b.index.Get([]byte(name)); err == nil {
-		//return &index{
-		//  key: buf.Uvarint(),
-		//  first: buf.Uint64(),
-		//  last: buf.Uint64(),
-		//}
-		key, n := binary.Uvarint(metadata)
+func (b *Block) findGroupingOffset(name string) uint64 {
+	if value, err := b.index.Get([]byte("g" + name)); err == nil {
+		return newByteBuffer(value).PullUvarint()
+	}
 
-		var first uint64
-		binary.Read(bytes.NewReader(metadata[n:n+8]), binary.LittleEndian, &first)
+	return 0
+}
 
-		var last uint64
-		binary.Read(bytes.NewReader(metadata[n+8:]), binary.LittleEndian, &last)
+func (b *Block) findIndex(name, value string) *buffer {
+	if val, err := b.index.Get([]byte("i" + name + ":" + value)); err == nil {
+		buf := newByteBuffer(val)
 
-		return &index{
-			key:   key,
-			first: first,
-			last:  last,
-		}
+		offset := buf.PullUvarint()
+		length := buf.PullUvarint()
+
+		return newBuffer(b.buf.reader, b.offset+offset, b.offset+offset+length, 4096)
 	}
 
 	return nil

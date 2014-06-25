@@ -17,17 +17,16 @@ type blockWriter struct {
 
 	written bool
 
-	groupings eventsMap
-	indexes   eventsMap
-	indexKeys map[string]int
+	groupings map[string]events
+	indexes   map[string]events
 }
 
 func newBlock(writer io.Writer, id []byte) *blockWriter {
 	return &blockWriter{
 		Id:        id,
 		writer:    writer,
-		groupings: make(eventsMap),
-		indexes:   make(eventsMap),
+		groupings: make(map[string]events),
+		indexes:   make(map[string]events),
 	}
 }
 
@@ -64,64 +63,21 @@ func (w *blockWriter) write() (int64, error) {
 
 	w.written = true
 
-	w.generateIndexKeys()
-	w.doublyLinkEvents()
-
 	buf := new(bytes.Buffer)
 
 	buf.Write([]byte{42})
 
-	if err := w.writeEvents(buf); err != nil {
+	if err := w.writeEvents(uint64(buf.Len()), buf); err != nil {
 		return 0, err
 	}
-	if err := w.writeIndex(buf); err != nil {
+	if err := w.writeIndex(uint64(buf.Len()), buf); err != nil {
 		return 0, err
 	}
 
 	return buf.WriteTo(w.writer)
 }
 
-func (w *blockWriter) generateIndexKeys() {
-	w.indexKeys = make(map[string]int)
-
-	for i, name := range w.indexes.keysSortedByEventCount() {
-		w.indexKeys["i"+name] = i + 1
-	}
-
-	for i, name := range w.groupings.keysSortedByEventCount() {
-		w.indexKeys["g"+name] = i + 1
-	}
-
-}
-
-func (w *blockWriter) doublyLinkEvents() {
-	for name, events := range w.indexes {
-		sort.Stable(events)
-
-		var prev *Event
-
-		key := w.indexKeys["i"+name]
-
-		for _, event := range events {
-			event.prev[key] = nil
-			event.next[key] = nil
-
-			if prev != nil {
-				prev.next[key] = event
-				event.prev[key] = prev
-				event.next[key] = nil
-			}
-
-			prev = event
-		}
-	}
-}
-
-func (w *blockWriter) writeEvents(buf io.Writer) error {
-	var offset int64
-
-	offset = 1
-
+func (w *blockWriter) writeEvents(offset uint64, buf io.Writer) error {
 	groupings := make(sort.StringSlice, 0, len(w.groupings))
 
 	for grouping, _ := range w.groupings {
@@ -137,66 +93,82 @@ func (w *blockWriter) writeEvents(buf io.Writer) error {
 
 		for _, event := range events {
 			event.offset = offset
+
 			offset += event.length()
-		}
 
-		offset += 1
-	}
-
-	for _, grouping := range groupings {
-		events := w.groupings[grouping]
-
-		for _, event := range events {
 			if _, err := buf.Write(event.encode()); err != nil {
 				return err
 			}
 		}
 
 		buf.Write([]byte{0})
+		offset += 1
 	}
 
 	return nil
 }
 
-func (w *blockWriter) writeIndex(out io.Writer) error {
+func (w *blockWriter) writeIndex(offset uint64, out io.Writer) error {
 	buf := new(bytes.Buffer)
 
-	names := make(sort.StringSlice, 0)
-	keys := make(map[string]int)
-	firsts := make(map[string]int64)
-	lasts := make(map[string]int64)
+	groupings := make(sort.StringSlice, 0)
+	indexes := make(sort.StringSlice, 0)
+	offsets := make(map[string]uint64)
+	lengths := make(map[string]uint64)
 
-	record := func(prefix, name string, es events) {
-		if len(es) > 0 {
-			names = append(names, prefix+name)
-			keys[prefix+name] = w.indexKeys[prefix+name]
-			firsts[prefix+name] = es[0].offset
-			lasts[prefix+name] = es[len(es)-1].offset
+	scratch := make([]byte, 8)
+
+	for name, _ := range w.groupings {
+		groupings = append(groupings, name)
+	}
+
+	for name, events := range w.indexes {
+		indexes = append(indexes, name)
+
+		sort.Stable(events)
+
+		offsets[name] = offset
+
+		for _, event := range events {
+			binary.Write(buf, binary.LittleEndian, uint64(event.offset))
+			lengths[name] += 8
+		}
+
+		offset += lengths[name]
+	}
+
+	if _, err := buf.WriteTo(out); err != nil {
+		return err
+	}
+
+	groupings.Sort()
+	indexes.Sort()
+
+	buf = new(bytes.Buffer)
+	st := sst.NewWriter(buf)
+
+	for _, name := range groupings {
+		events := w.groupings[name]
+
+		b := new(bytes.Buffer)
+
+		n := binary.PutUvarint(scratch, events[0].offset)
+		b.Write(scratch[:n])
+
+		if err := st.Set([]byte("g"+name), b.Bytes()); err != nil {
+			return err
 		}
 	}
 
-	for name, events := range w.groupings {
-		record("g", name, events)
-	}
-	for name, events := range w.indexes {
-		record("i", name, events)
-	}
-
-	names.Sort()
-
-	st := sst.NewWriter(buf)
-
-	for _, name := range names {
+	for _, name := range indexes {
 		b := new(bytes.Buffer)
 
-		key := make([]byte, 8)
-		written := binary.PutUvarint(key, uint64(keys[name]))
-		b.Write(key[:written])
+		n := binary.PutUvarint(scratch, offsets[name])
+		b.Write(scratch[:n])
+		n = binary.PutUvarint(scratch, lengths[name])
+		b.Write(scratch[:n])
 
-		binary.Write(b, binary.LittleEndian, firsts[name])
-		binary.Write(b, binary.LittleEndian, lasts[name])
-
-		if err := st.Set([]byte(name), b.Bytes()); err != nil {
+		if err := st.Set([]byte("i"+name), b.Bytes()); err != nil {
 			return err
 		}
 	}
