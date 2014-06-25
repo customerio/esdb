@@ -43,14 +43,14 @@ func (b *Block) Scan(grouping string, scanner Scanner) {
 	}
 }
 
-func (b *Block) ScanIndex(name string, scanner Scanner) {
-	if index := b.findIndex("i" + name); index != nil {
+func (b *Block) ScanIndex(name, value string, scanner Scanner) {
+	if index := b.findIndex("i" + name + ":" + value); index != nil {
 		b.scan(index.first, index.key, 0, scanner, false)
 	}
 }
 
-func (b *Block) RevScanIndex(name string, scanner Scanner) {
-	if index := b.findIndex("i" + name); index != nil {
+func (b *Block) RevScanIndex(name, value string, scanner Scanner) {
+	if index := b.findIndex("i" + name + ":" + value); index != nil {
 		b.scan(index.last, index.key, 0, scanner, true)
 	}
 }

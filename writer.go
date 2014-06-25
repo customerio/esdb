@@ -33,7 +33,7 @@ func New(path string) (*Writer, error) {
 	}, nil
 }
 
-func (w *Writer) Add(blockId []byte, data []byte, timestamp int, grouping string, indexes []string) error {
+func (w *Writer) Add(blockId []byte, data []byte, timestamp int, grouping string, indexes map[string]string) error {
 	if w.written {
 		return errors.New("Cannot add to database. We're immutable and this one has already been written.")
 	}

@@ -31,7 +31,7 @@ func newBlock(writer io.Writer, id []byte) *blockWriter {
 	}
 }
 
-func (w *blockWriter) add(data []byte, timestamp int, grouping string, indexes []string) error {
+func (w *blockWriter) add(data []byte, timestamp int, grouping string, indexes map[string]string) error {
 	if w.written {
 		return errors.New("Cannot add to block. We're immutable and this one has already been written.")
 	}
@@ -44,12 +44,14 @@ func (w *blockWriter) add(data []byte, timestamp int, grouping string, indexes [
 
 	w.groupings[grouping] = append(w.groupings[grouping], event)
 
-	for _, name := range indexes {
-		if w.indexes[name] == nil {
-			w.indexes[name] = make([]*Event, 0)
+	for name, value := range indexes {
+		serialized := name + ":" + value
+
+		if w.indexes[serialized] == nil {
+			w.indexes[serialized] = make([]*Event, 0)
 		}
 
-		w.indexes[name] = append(w.indexes[name], event)
+		w.indexes[serialized] = append(w.indexes[serialized], event)
 	}
 
 	return nil

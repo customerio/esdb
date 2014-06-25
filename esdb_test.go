@@ -8,13 +8,13 @@ import (
 	"testing"
 )
 
-func fetchBlockIndex(db *Db, id []byte, index string) []string {
+func fetchBlockIndex(db *Db, id []byte, index, value string) []string {
 	found := make([]string, 0)
 
 	block := db.Find(id)
 
 	if block != nil {
-		block.ScanIndex(index, func(event *Event) bool {
+		block.ScanIndex(index, value, func(event *Event) bool {
 			found = append(found, string(event.Data))
 			return true
 		})
@@ -57,12 +57,12 @@ func populate(w *Writer) {
 		newEvent(2, []byte("6")),
 	}
 
-	w.Add([]byte("a"), evs[0].Data, evs[0].Timestamp, "g", []string{"", "i1", "i2"})
-	w.Add([]byte("a"), evs[1].Data, evs[1].Timestamp, "h", []string{"", "i2"})
-	w.Add([]byte("a"), evs[2].Data, evs[2].Timestamp, "i", []string{"", "i1"})
-	w.Add([]byte("b"), evs[3].Data, evs[3].Timestamp, "g", []string{"", "i1"})
-	w.Add([]byte("b"), evs[4].Data, evs[4].Timestamp, "h", []string{"", "i1"})
-	w.Add([]byte("b"), evs[5].Data, evs[5].Timestamp, "i", []string{"", "i1", "i2"})
+	w.Add([]byte("a"), evs[0].Data, evs[0].Timestamp, "g", map[string]string{"ts": "", "i": "i1"})
+	w.Add([]byte("a"), evs[1].Data, evs[1].Timestamp, "h", map[string]string{"ts": "", "i": "i2"})
+	w.Add([]byte("a"), evs[2].Data, evs[2].Timestamp, "i", map[string]string{"ts": "", "i": "i1"})
+	w.Add([]byte("b"), evs[3].Data, evs[3].Timestamp, "g", map[string]string{"ts": "", "i": "i1"})
+	w.Add([]byte("b"), evs[4].Data, evs[4].Timestamp, "h", map[string]string{"ts": "", "i": "i1"})
+	w.Add([]byte("b"), evs[5].Data, evs[5].Timestamp, "i", map[string]string{"ts": "", "i": "i1"})
 }
 
 func TestBlockIndexes(t *testing.T) {
@@ -71,20 +71,21 @@ func TestBlockIndexes(t *testing.T) {
 	var tests = []struct {
 		id    string
 		index string
+		value string
 		want  []string
 	}{
-		{"a", "", []string{"3", "1", "2"}},
-		{"a", "i1", []string{"3", "1"}},
-		{"a", "i2", []string{"1", "2"}},
-		{"b", "", []string{"4", "5", "6"}},
-		{"b", "i1", []string{"4", "5", "6"}},
-		{"b", "i2", []string{"6"}},
-		{"b", "i3", []string{}},
-		{"c", "", []string{}},
+		{"a", "ts", "", []string{"3", "1", "2"}},
+		{"a", "i", "i1", []string{"3", "1"}},
+		{"a", "i", "i2", []string{"2"}},
+		{"b", "ts", "", []string{"4", "5", "6"}},
+		{"b", "i", "i1", []string{"4", "5", "6"}},
+		{"b", "i", "i2", []string{}},
+		{"b", "i", "i3", []string{}},
+		{"c", "ts", "", []string{}},
 	}
 
 	for i, test := range tests {
-		found := fetchBlockIndex(db, []byte(test.id), test.index)
+		found := fetchBlockIndex(db, []byte(test.id), test.index, test.value)
 
 		if !reflect.DeepEqual(test.want, found) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.want, found)
@@ -144,7 +145,7 @@ func BenchmarkMillionEventDbScanIndexSingle(b *testing.B) {
 		}
 
 		city := cities[rand.Intn(100)]
-		db.Find([]byte("visit")).ScanIndex(city, func(e *Event) bool {
+		db.Find([]byte("visit")).ScanIndex("city", city, func(e *Event) bool {
 			return false
 		})
 	}
@@ -187,7 +188,7 @@ func BenchmarkMillionEventDbScanIndex500(b *testing.B) {
 		count := 0
 
 		city := cities[rand.Intn(100)]
-		db.Find([]byte("visit")).ScanIndex(city, func(e *Event) bool {
+		db.Find([]byte("visit")).ScanIndex("city", city, func(e *Event) bool {
 			count += 1
 			return count < 500
 		})

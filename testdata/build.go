@@ -75,7 +75,7 @@ func main() {
 		}
 
 		for _, e := range visits {
-			w.Add([]byte(e.EventType), e.Timestamp, e.data, e.Host, []string{e.Visitor, e.City})
+			w.Add([]byte(e.EventType), e.data, e.Timestamp, e.Host, map[string]string{"visitor": e.Visitor, "city": e.City})
 			js.Write(append(e.data, byte('\n')))
 		}
 

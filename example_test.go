@@ -49,7 +49,9 @@ func ExampleDb() {
 			value,                // value can be any binary data.
 			e.timestamp,          // all events will be stored sorted by this value.
 			"",                   // grouping. "" here means no grouping, store sequentially by timestamp.
-			[]string{e.eventType}, // We'll define one secondary index on event type.
+			map[string]string{
+				"type": e.eventType, // We'll define one secondary index on event type.
+			},
 		)
 	}
 
@@ -79,14 +81,14 @@ func ExampleDb() {
 
 	// Just retrieve customer 1's purchases
 	fmt.Println("\npurchases for 1:")
-	db.Find([]byte("1")).ScanIndex("purchase", func(event *Event) bool {
+	db.Find([]byte("1")).ScanIndex("type", "purchase", func(event *Event) bool {
 		fmt.Println(string(event.Data))
 		return true // continue
 	})
 
 	// Just retrieve customer 3's clicks ordered descending
 	fmt.Println("\nclicks for 3:")
-	db.Find([]byte("3")).RevScanIndex("click", func(event *Event) bool {
+	db.Find([]byte("3")).RevScanIndex("type", "click", func(event *Event) bool {
 		fmt.Println(string(event.Data))
 		return true // continue
 	})

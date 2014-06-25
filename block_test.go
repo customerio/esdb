@@ -22,9 +22,9 @@ func populateBlock(block *blockWriter) {
 		newEvent(1, []byte("3")),
 	}
 
-	block.add(es[0].Data, es[0].Timestamp, "a", []string{"", "i1", "i2"})
-	block.add(es[1].Data, es[1].Timestamp, "b", []string{"", "i2"})
-	block.add(es[2].Data, es[2].Timestamp, "b", []string{"", "i1"})
+	block.add(es[0].Data, es[0].Timestamp, "a", map[string]string{"ts": "", "i": "i1"})
+	block.add(es[1].Data, es[1].Timestamp, "b", map[string]string{"ts": "", "i": "i2"})
+	block.add(es[2].Data, es[2].Timestamp, "b", map[string]string{"ts": "", "i": "i1"})
 }
 
 func fetchPrimary(block *Block, primary string) []string {
@@ -40,7 +40,7 @@ func fetchPrimary(block *Block, primary string) []string {
 	return found
 }
 
-func fetchIndex(block *Block, index string, reverse bool) []string {
+func fetchIndex(block *Block, index, value string, reverse bool) []string {
 	found := make([]string, 0)
 
 	fetch := block.ScanIndex
@@ -49,7 +49,7 @@ func fetchIndex(block *Block, index string, reverse bool) []string {
 		fetch = block.RevScanIndex
 	}
 
-	fetch(index, func(event *Event) bool {
+	fetch(index, value, func(event *Event) bool {
 		found = append(found, string(event.Data))
 		return true
 	})
@@ -62,20 +62,21 @@ func TestBlockIndexScanning(t *testing.T) {
 
 	var tests = []struct {
 		index   string
+		value   string
 		want    []string
 		reverse bool
 	}{
-		{"", []string{"3", "1", "2"}, false},
-		{"i1", []string{"3", "1"}, false},
-		{"i2", []string{"1", "2"}, false},
-		{"i3", []string{}, false},
-		{"", []string{"2", "1", "3"}, true},
-		{"i1", []string{"1", "3"}, true},
-		{"i2", []string{"2", "1"}, true},
+		{"ts", "", []string{"3", "1", "2"}, false},
+		{"i", "i1", []string{"3", "1"}, false},
+		{"i", "i2", []string{"2"}, false},
+		{"i", "i3", []string{}, false},
+		{"ts", "", []string{"2", "1", "3"}, true},
+		{"i", "i1", []string{"1", "3"}, true},
+		{"i", "i2", []string{"2"}, true},
 	}
 
 	for i, test := range tests {
-		found := fetchIndex(block, test.index, test.reverse)
+		found := fetchIndex(block, test.index, test.value, test.reverse)
 
 		if !reflect.DeepEqual(test.want, found) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.want, found)
