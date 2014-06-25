@@ -3,32 +3,63 @@ package esdb
 import (
 	"bytes"
 	"encoding/binary"
+	"sort"
 )
 
-type Events []*Event
+type pairs []pair
+type pair struct {
+	key    string
+	length int
+}
 
-func (e Events) Len() int           { return len(e) }
-func (e Events) Less(i, j int) bool { return e[i].Timestamp < e[j].Timestamp }
-func (e Events) Swap(i, j int)      { e[i], e[j] = e[j], e[i] }
+func (p pairs) Len() int           { return len(p) }
+func (p pairs) Less(i, j int) bool { return p[i].length < p[j].length }
+func (p pairs) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+type events []*Event
+
+func (e events) Len() int           { return len(e) }
+func (e events) Less(i, j int) bool { return e[i].Timestamp < e[j].Timestamp }
+func (e events) Swap(i, j int)      { e[i], e[j] = e[j], e[i] }
+
+type eventsMap map[string]events
+
+func (m eventsMap) keysSortedByEventCount() []string {
+	p := make(pairs, 0, len(m))
+
+	for k, v := range m {
+		p = append(p, pair{k, len(v)})
+	}
+
+	sort.Sort(p)
+
+	keys := make([]string, len(m))
+
+	for i, pair := range p {
+		keys[i] = pair.key
+	}
+
+	return keys
+}
 
 type Event struct {
 	Data      []byte
 	Timestamp int
 
-	prevOffsets map[string]uint64
-	nextOffsets map[string]uint64
+	prevOffsets map[int]uint64
+	nextOffsets map[int]uint64
 
 	offset int64
-	prev   map[string]*Event
-	next   map[string]*Event
+	prev   map[int]*Event
+	next   map[int]*Event
 }
 
 func newEvent(timestamp int, data []byte) *Event {
 	return &Event{
 		Timestamp: timestamp,
 		Data:      data,
-		prev:      make(map[string]*Event),
-		next:      make(map[string]*Event),
+		prev:      make(map[int]*Event),
+		next:      make(map[int]*Event),
 	}
 }
 
@@ -42,18 +73,15 @@ func decodeEvent(encoded []byte) *Event {
 	data := encoded[index : index+int(dataLen)]
 	index += int(dataLen)
 
-	event := &Event{Data: data, prevOffsets: make(map[string]uint64), nextOffsets: make(map[string]uint64)}
+	event := &Event{Data: data, prevOffsets: make(map[int]uint64), nextOffsets: make(map[int]uint64)}
 
 	var indexLen uint8
 	binary.Read(bytes.NewReader(encoded[index:index+1]), binary.LittleEndian, &indexLen)
 	index += 1
 
 	for i := 0; i < int(indexLen); i++ {
-		nameLen, n := binary.Uvarint(encoded[index:])
+		key, n := binary.Uvarint(encoded[index:])
 		index += int(n)
-
-		name := string(encoded[index : index+int(nameLen)])
-		index += int(nameLen)
 
 		var prev uint64
 		var next uint64
@@ -62,8 +90,8 @@ func decodeEvent(encoded []byte) *Event {
 		binary.Read(bytes.NewReader(encoded[index:index+8]), binary.LittleEndian, &next)
 		index += 8
 
-		event.prevOffsets[name] = prev
-		event.nextOffsets[name] = next
+		event.prevOffsets[int(key)] = prev
+		event.nextOffsets[int(key)] = next
 	}
 
 	return event
@@ -92,19 +120,18 @@ func (e *Event) encodeLinks(buf *bytes.Buffer) {
 
 	binary.Write(buf, binary.LittleEndian, numLinks)
 
-	for index, _ := range e.prev {
-		buf.Write(varInt(len(index)))
-		buf.Write([]byte(index))
+	for key, _ := range e.prev {
+		buf.Write(varInt(key))
 
 		var prev int64
 		var next int64
 
-		if e.prev[index] != nil {
-			prev = e.prev[index].offset
+		if e.prev[key] != nil {
+			prev = e.prev[key].offset
 		}
 
-		if e.next[index] != nil {
-			next = e.next[index].offset
+		if e.next[key] != nil {
+			next = e.next[key].offset
 		}
 
 		binary.Write(buf, binary.LittleEndian, prev)
@@ -113,7 +140,7 @@ func (e *Event) encodeLinks(buf *bytes.Buffer) {
 }
 
 func varInt(n int) []byte {
-	bytes := make([]byte, 64)
+	bytes := make([]byte, 8)
 	written := binary.PutUvarint(bytes, uint64(n))
 	return bytes[:written]
 }

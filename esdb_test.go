@@ -23,7 +23,7 @@ func fetchBlockIndex(db *Db, id []byte, index string) []string {
 	return found
 }
 
-var events Events
+var evs events
 
 func createDb() *Db {
 	os.MkdirAll("tmp", 0755)
@@ -48,7 +48,7 @@ func createDb() *Db {
 }
 
 func populate(w *Writer) {
-	events = Events{
+	evs = events{
 		newEvent(2, []byte("1")),
 		newEvent(3, []byte("2")),
 		newEvent(1, []byte("3")),
@@ -57,12 +57,12 @@ func populate(w *Writer) {
 		newEvent(2, []byte("6")),
 	}
 
-	w.Add([]byte("a"), events[0].Timestamp, events[0].Data, "g", []string{"", "i1", "i2"})
-	w.Add([]byte("a"), events[1].Timestamp, events[1].Data, "h", []string{"", "i2"})
-	w.Add([]byte("a"), events[2].Timestamp, events[2].Data, "i", []string{"", "i1"})
-	w.Add([]byte("b"), events[3].Timestamp, events[3].Data, "g", []string{"", "i1"})
-	w.Add([]byte("b"), events[4].Timestamp, events[4].Data, "h", []string{"", "i1"})
-	w.Add([]byte("b"), events[5].Timestamp, events[5].Data, "i", []string{"", "i1", "i2"})
+	w.Add([]byte("a"), evs[0].Timestamp, evs[0].Data, "g", []string{"", "i1", "i2"})
+	w.Add([]byte("a"), evs[1].Timestamp, evs[1].Data, "h", []string{"", "i2"})
+	w.Add([]byte("a"), evs[2].Timestamp, evs[2].Data, "i", []string{"", "i1"})
+	w.Add([]byte("b"), evs[3].Timestamp, evs[3].Data, "g", []string{"", "i1"})
+	w.Add([]byte("b"), evs[4].Timestamp, evs[4].Data, "h", []string{"", "i1"})
+	w.Add([]byte("b"), evs[5].Timestamp, evs[5].Data, "i", []string{"", "i1", "i2"})
 }
 
 func TestBlockIndexes(t *testing.T) {

@@ -16,15 +16,15 @@ func create(id []byte) *Block {
 }
 
 func populateBlock(block *blockWriter) {
-	events = Events{
+	es := events{
 		newEvent(2, []byte("1")),
 		newEvent(3, []byte("2")),
 		newEvent(1, []byte("3")),
 	}
 
-	block.add(events[0].Timestamp, events[0].Data, "a", []string{"", "i1", "i2"})
-	block.add(events[1].Timestamp, events[1].Data, "b", []string{"", "i2"})
-	block.add(events[2].Timestamp, events[2].Data, "b", []string{"", "i1"})
+	block.add(es[0].Timestamp, es[0].Data, "a", []string{"", "i1", "i2"})
+	block.add(es[1].Timestamp, es[1].Data, "b", []string{"", "i2"})
+	block.add(es[2].Timestamp, es[2].Data, "b", []string{"", "i1"})
 }
 
 func fetchPrimary(block *Block, primary string) []string {

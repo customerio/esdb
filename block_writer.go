@@ -17,17 +17,17 @@ type blockWriter struct {
 
 	written bool
 
-	groups  map[string]Events
-	indexes map[string]Events
+	groups    eventsMap
+	indexes   eventsMap
+	indexKeys map[string]int
 }
 
 func newBlock(writer io.Writer, id []byte) *blockWriter {
 	return &blockWriter{
 		Id:      id,
 		writer:  writer,
-		written: false, // to be explicit...
-		groups:  make(map[string]Events),
-		indexes: make(map[string]Events),
+		groups:  make(eventsMap),
+		indexes: make(eventsMap),
 	}
 }
 
@@ -62,6 +62,7 @@ func (w *blockWriter) write() (int64, error) {
 
 	w.written = true
 
+	w.generateIndexKeys()
 	w.doublyLinkEvents()
 
 	buf := new(bytes.Buffer)
@@ -78,20 +79,35 @@ func (w *blockWriter) write() (int64, error) {
 	return buf.WriteTo(w.writer)
 }
 
+func (w *blockWriter) generateIndexKeys() {
+	w.indexKeys = make(map[string]int)
+
+	for i, name := range w.indexes.keysSortedByEventCount() {
+		w.indexKeys["i"+name] = i
+	}
+
+	for i, name := range w.groups.keysSortedByEventCount() {
+		w.indexKeys["g"+name] = i
+	}
+
+}
+
 func (w *blockWriter) doublyLinkEvents() {
-	for index, events := range w.indexes {
+	for name, events := range w.indexes {
 		sort.Stable(events)
 
 		var prev *Event
 
+		key := w.indexKeys["i"+name]
+
 		for _, event := range events {
-			event.prev[index] = nil
-			event.next[index] = nil
+			event.prev[key] = nil
+			event.next[key] = nil
 
 			if prev != nil {
-				prev.next[index] = event
-				event.prev[index] = prev
-				event.next[index] = nil
+				prev.next[key] = event
+				event.prev[key] = prev
+				event.next[key] = nil
 			}
 
 			prev = event
@@ -143,15 +159,17 @@ func (w *blockWriter) writeEvents(buf io.Writer) error {
 func (w *blockWriter) writeIndex(out io.Writer) error {
 	buf := new(bytes.Buffer)
 
-	keys := make(sort.StringSlice, 0)
-	starts := make(map[string]int64)
-	stops := make(map[string]int64)
+	names := make(sort.StringSlice, 0)
+	keys := make(map[string]int)
+	firsts := make(map[string]int64)
+	lasts := make(map[string]int64)
 
-	record := func(prefix, name string, events Events) {
-		if len(events) > 0 {
-			keys = append(keys, prefix+name)
-			starts[prefix+name] = events[0].offset
-			stops[prefix+name] = events[len(events)-1].offset
+	record := func(prefix, name string, es events) {
+		if len(es) > 0 {
+			names = append(names, prefix+name)
+			keys[prefix+name] = w.indexKeys[prefix+name]
+			firsts[prefix+name] = es[0].offset
+			lasts[prefix+name] = es[len(es)-1].offset
 		}
 	}
 
@@ -162,17 +180,21 @@ func (w *blockWriter) writeIndex(out io.Writer) error {
 		record("i", name, events)
 	}
 
-	keys.Sort()
+	names.Sort()
 
 	st := sst.NewWriter(buf)
 
-	for _, key := range keys {
+	for _, name := range names {
 		b := new(bytes.Buffer)
 
-		binary.Write(b, binary.LittleEndian, starts[key])
-		binary.Write(b, binary.LittleEndian, stops[key])
+		key := make([]byte, 8)
+		written := binary.PutUvarint(key, uint64(keys[name]))
+		b.Write(key[:written])
 
-		if err := st.Set([]byte(key), b.Bytes()); err != nil {
+		binary.Write(b, binary.LittleEndian, firsts[name])
+		binary.Write(b, binary.LittleEndian, lasts[name])
+
+		if err := st.Set([]byte(name), b.Bytes()); err != nil {
 			return err
 		}
 	}
