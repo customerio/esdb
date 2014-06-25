@@ -29,6 +29,7 @@ func main() {
 	} {
 
 		esdbFile := strings.Replace(file, ".csv", ".esdb", 1)
+		jsonFile := strings.Replace(file, ".csv", ".json", 1)
 		os.Remove(esdbFile)
 
 		f, err := os.Open(file)
@@ -68,14 +69,22 @@ func main() {
 			panic(err)
 		}
 
+		js, err := os.Create(jsonFile)
+		if err != nil {
+			panic(err)
+		}
+
 		for _, e := range visits {
 			w.Add([]byte(e.EventType), e.Timestamp, e.data, e.Host, []string{e.Visitor, e.City})
+			js.Write(append(e.data, byte('\n')))
 		}
 
 		err = w.Write()
 		if err != nil {
 			panic(err)
 		}
+
+		js.Close()
 
 		fmt.Println("done:", time.Since(start))
 	}
