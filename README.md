@@ -37,7 +37,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/customerio/esdb"
+  "github.com/customerio/esdb"
 )
 
 type event struct {
@@ -65,10 +65,12 @@ func main() {
 		event{"3", 1403534923, "page", map[string]string{"url": "http://mysite.com/thankyou"}},
 	}
 
-	// In case we've already created the file.
-	os.Remove("activity.esdb")
+	os.MkdirAll("tmp", 0755)
 
-	writer, err := esdb.New("activity.esdb")
+	// In case we've already created the file.
+	os.Remove("tmp/activity.esdb")
+
+	writer, err := esdb.New("tmp/activity.esdb")
 	if err != nil {
 		panic(err)
 	}
@@ -77,11 +79,13 @@ func main() {
 		value, _ := json.Marshal(e.data)
 
 		writer.Add(
-			[]byte(e.customerId),  // block the event will be stored under.
-			value,                 // value can be any binary data.
-			e.timestamp,           // all events will be stored sorted by this value.
-			"",                    // grouping. "" here means no grouping, store sequentially by timestamp.
-			[]string{e.eventType}, // We'll define one secondary index on event type.
+			[]byte(e.customerId), // block the event will be stored under.
+			value,                // value can be any binary data.
+			e.timestamp,          // all events will be stored sorted by this value.
+			"",                   // grouping. "" here means no grouping, store sequentially by timestamp.
+			map[string]string{
+				"type": e.eventType, // We'll define one secondary index on event type.
+			},
 		)
 	}
 
@@ -90,42 +94,58 @@ func main() {
 		panic(err)
 	}
 
-	db, err := esdb.Open("activity.esdb")
+	db, err := esdb.Open("tmp/activity.esdb")
 	if err != nil {
 		panic(err)
 	}
 
 	// Stream through all customer 1's activity
 	fmt.Println("activity for 1:")
-
-	db.Find([]byte("1")).Scan("", func(event *esdb.Event) bool {
+	db.Find([]byte("1")).Scan("", func(event *Event) bool {
 		fmt.Println(string(event.Data))
 		return true // continue
 	})
 
 	// Stream through all customer 2's activity
 	fmt.Println("\nactivity for 2:")
-
-	db.Find([]byte("2")).Scan("", func(event *esdb.Event) bool {
+	db.Find([]byte("2")).Scan("", func(event *Event) bool {
 		fmt.Println(string(event.Data))
 		return true // continue
 	})
 
 	// Just retrieve customer 1's purchases
 	fmt.Println("\npurchases for 1:")
-
-	db.Find([]byte("1")).ScanIndex("purchase", func(event *esdb.Event) bool {
+	db.Find([]byte("1")).ScanIndex("type", "purchase", func(event *Event) bool {
 		fmt.Println(string(event.Data))
 		return true // continue
 	})
 
 	// Just retrieve customer 3's clicks ordered descending
 	fmt.Println("\nclicks for 3:")
-
-	db.Find([]byte("3")).RevScanIndex("click", func(event *esdb.Event) bool {
+	db.Find([]byte("3")).RevScanIndex("type", "click", func(event *Event) bool {
 		fmt.Println(string(event.Data))
 		return true // continue
 	})
+
+	// Output:
+	// activity for 1:
+	// {"total":"42.99"}
+	// {"url":"http://mysite.com/thankyou"}
+	// {"url":"http://mysite.com/checkout"}
+	// {"button_text":"Checkout"}
+	// {"url":"http://mysite.com/"}
+	//
+	// activity for 2:
+	// {"url":"http://mysite.com/about"}
+	// {"button_text":"About"}
+	// {"url":"http://mysite.com/"}
+	//
+	// purchases for 1:
+	// {"total":"42.99"}
+	//
+	// clicks for 3:
+	// {"button_text":"Checkout"}
+	// {"button_text":"About"}
 }
 ```
 
