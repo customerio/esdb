@@ -1,18 +1,33 @@
 # Event Stream Database
 
-Immutable storage for timestamped event streams. Inspired by [CDB](http://cr.yp.to/cdb.html) and [LevelDB](http://en.wikipedia.org/wiki/LevelDB)'s SSTable file format.
+Immutable storage for timestamped event streams. Inspired by
+[CDB](http://cr.yp.to/cdb.html) and
+[LevelDB](http://en.wikipedia.org/wiki/LevelDB)'s SSTable file format.
 
-At [Customer.io](http://customer.io), we process billions of events every month, and have a need for maintaining all historic events in full resolution in a simple manner (not feasible to simply distill into timeseries data).
+At [Customer.io](http://customer.io), we process billions of events every
+month, and have a need for maintaining all historic events in full resolution
+in a simple manner (not feasible to simply distill into timeseries data).
 
-After investigating strategies for maintaining these events, we enjoyed the simple approach of archiving old events into structured flat files which provides dead simple backups, restores, and needs no running process to work.  After investigating current strategies and getting down and dirty with CDB and LevelDB, we choose to create ESDB as a stategy dedicated to querying event stream data.
+After investigating strategies for maintaining these events, we enjoyed the
+simple approach of archiving old events into structured flat files which
+provides dead simple backups, restores, and needs no running process to work.
+After investigating current strategies and getting down and dirty with CDB and
+LevelDB, we choose to create ESDB as a stategy dedicated to querying event
+stream data.
 
-*WARNING: version 0.0.00000001. I wrote this in one day as a proof of concept. We're planning on using it in production but there's a lot of testing, fine-tuning, and potential large changes to do before then.*
+*WARNING: version 0.0.00000001. I wrote this in one day as a proof of concept.
+We're planning on using it in production but there's a lot of testing,
+fine-tuning, and potential large changes to do before then.*
 
 ### Example
 
 Let's assume you're tracking website activity.
 
-You would like to store all pageviews, clicks, and purchases for every user of your site.  You'd like to quickly scan through the entire history for processing. However, you'd also like to occasionally just retrieve purchase events without the overhead of scanning through all the pageview and click data.
+You would like to store all pageviews, clicks, and purchases for every user of
+your site.  You'd like to quickly scan through the entire history for
+processing. However, you'd also like to occasionally just retrieve purchase
+events without the overhead of scanning through all the pageview and click
+data.
 
 ```
 package main
@@ -118,19 +133,30 @@ func main() {
 
 1. Fast streaming of events ordered by timestamp.
 
-   Events are stored on disk sequentially ordered by timestamp (or, an optional grouping and timestamp). This means scanning through a series of ordered events is extremely fast!
+   Events are stored on disk sequentially ordered by timestamp (or, an optional
+grouping and timestamp). This means scanning through a series of ordered events
+is extremely fast!
 
 2. Secondary indexes for quickly scanning through just a subset of events.
 
-   Scanning though a subset of events is preferable to scanning through the entire event stream, especially when the event stream contains many events which you aren't currently interested. ESDB allows definition of secondary indexes which allow quick retrieval of just events in the index.
+   Scanning though a subset of events is preferable to scanning through the
+entire event stream, especially when the event stream contains many events
+which you aren't currently interested. ESDB allows definition of secondary
+indexes which allow quick retrieval of just events in the index.
    
-   Secondary indexes are retrieved in timestamp order, and can be scanned forward and backwards.
+   Secondary indexes are retrieved in timestamp order, and can be scanned
+forward and backwards.
    
 3. Low overhead.
 
-   Event overhead: as little 3 bytes + 17 bytes for each secondary index for each event stored. The 17 byte secondary index overhead is only applied for indexes which the particular event is apart.
+   Event overhead: as little 3 bytes + 17 bytes for each secondary index for
+each event stored. The 17 byte secondary index overhead is only applied for
+indexes which the particular event is apart.
    
-   File overhead: offset information based on the number of blocks and groupings which are created is maintained at the end of the file. Generally, in a reasonably sized file, this should be negligible as event data and per event overhead should be the main driver of file size.
+   File overhead: offset information based on the number of blocks and
+groupings which are created is maintained at the end of the file. Generally, in
+a reasonably sized file, this should be negligible as event data and per event
+overhead should be the main driver of file size.
 
 ### Format 
 
