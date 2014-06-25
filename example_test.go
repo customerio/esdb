@@ -42,12 +42,12 @@ func ExampleDb() {
 	}
 
 	for _, e := range events {
-		data, _ := json.Marshal(e.data)
+		value, _ := json.Marshal(e.data)
 
 		writer.Add(
 			[]byte(e.customerId), // block the event will be stored under.
+			value,                // value can be any binary data.
 			e.timestamp,          // all events will be stored sorted by this value.
-			data,                 // value can be any binary data.
 			"",                   // grouping. "" here means no grouping, store sequentially by timestamp.
 			[]string{e.eventType}, // We'll define one secondary index on event type.
 		)

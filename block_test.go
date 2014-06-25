@@ -12,7 +12,7 @@ func create(id []byte) *Block {
 	populateBlock(writer)
 	writer.write()
 
-	return block(bytes.NewReader(buffer.Bytes()), []byte("a"), 0, uint64(buffer.Len()))
+	return openBlock(bytes.NewReader(buffer.Bytes()), []byte("a"), 0, uint64(buffer.Len()))
 }
 
 func populateBlock(block *blockWriter) {
@@ -22,9 +22,9 @@ func populateBlock(block *blockWriter) {
 		newEvent(1, []byte("3")),
 	}
 
-	block.add(es[0].Timestamp, es[0].Data, "a", []string{"", "i1", "i2"})
-	block.add(es[1].Timestamp, es[1].Data, "b", []string{"", "i2"})
-	block.add(es[2].Timestamp, es[2].Data, "b", []string{"", "i1"})
+	block.add(es[0].Data, es[0].Timestamp, "a", []string{"", "i1", "i2"})
+	block.add(es[1].Data, es[1].Timestamp, "b", []string{"", "i2"})
+	block.add(es[2].Data, es[2].Timestamp, "b", []string{"", "i1"})
 }
 
 func fetchPrimary(block *Block, primary string) []string {

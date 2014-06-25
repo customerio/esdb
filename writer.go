@@ -33,23 +33,23 @@ func New(path string) (*Writer, error) {
 	}, nil
 }
 
-func (w *Writer) Add(id []byte, timestamp int, data []byte, index string, secondaries []string) error {
+func (w *Writer) Add(blockId []byte, data []byte, timestamp int, grouping string, indexes []string) error {
 	if w.written {
 		return errors.New("Cannot add to database. We're immutable and this one has already been written.")
 	}
 
-	block := w.blocks[string(id)]
+	block := w.blocks[string(blockId)]
 
 	if block == nil {
-		block = newBlock(w.file, id)
-		w.blocks[string(id)] = block
+		block = newBlock(w.file, blockId)
+		w.blocks[string(blockId)] = block
 	}
 
-	return block.add(timestamp, data, index, secondaries)
+	return block.add(data, timestamp, grouping, indexes)
 }
 
-func (w *Writer) Flush(id []byte) (err error) {
-	if block := w.blocks[string(id)]; block != nil {
+func (w *Writer) Flush(blockId []byte) (err error) {
+	if block := w.blocks[string(blockId)]; block != nil {
 		err = w.writeBlock(block)
 	}
 
@@ -71,23 +71,23 @@ func (w *Writer) write() error {
 
 	buf := new(bytes.Buffer)
 
-	blocks := make(sort.StringSlice, 0)
+	blockIds := make(sort.StringSlice, 0)
 
 	for _, block := range w.blocks {
-		blocks = append(blocks, string(block.Id))
+		blockIds = append(blockIds, string(block.Id))
 	}
 
-	blocks.Sort()
+	blockIds.Sort()
 
 	st := sst.NewWriter(buf)
 
-	for _, block := range blocks {
+	for _, blockId := range blockIds {
 		b := new(bytes.Buffer)
 
-		binary.Write(b, binary.LittleEndian, w.blockOffsets[block])
-		binary.Write(b, binary.LittleEndian, w.blockLengths[block])
+		binary.Write(b, binary.LittleEndian, w.blockOffsets[blockId])
+		binary.Write(b, binary.LittleEndian, w.blockLengths[blockId])
 
-		if err := st.Set([]byte(block), b.Bytes()); err != nil {
+		if err := st.Set([]byte(blockId), b.Bytes()); err != nil {
 			return err
 		}
 	}

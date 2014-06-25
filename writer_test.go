@@ -52,7 +52,7 @@ func TestWriterImmutability(t *testing.T) {
 	w, _ := New("tmp/test.esdb")
 	w.Write()
 
-	err := w.Add([]byte("b"), 1, []byte("1"), "i1", []string{"", "i2"})
+	err := w.Add([]byte("b"), []byte("1"), 1, "i1", []string{"", "i2"})
 
 	if err == nil || err.Error() != "Cannot add to database. We're immutable and this one has already been written." {
 		t.Errorf("Failed to throw error when adding events to a written database")
@@ -78,7 +78,7 @@ func BenchmarkWriteTenThousandEvents(b *testing.B) {
 		w, _ := New("tmp/bench" + strconv.Itoa(i) + ".esdb")
 
 		for _, e := range visits {
-			w.Add([]byte(e.EventType), e.Timestamp, e.data, e.Host, []string{e.Visitor, e.City})
+			w.Add([]byte(e.EventType), e.data, e.Timestamp, e.Host, []string{e.Visitor, e.City})
 		}
 
 		err := w.Write()
@@ -97,7 +97,7 @@ func BenchmarkWriteTenThousandEventsNoGrouping(b *testing.B) {
 		w, _ := New("tmp/bench" + strconv.Itoa(i) + ".esdb")
 
 		for _, e := range visits {
-			w.Add([]byte(e.EventType), e.Timestamp, e.data, "", []string{e.Host, e.Visitor, e.City})
+			w.Add([]byte(e.EventType), e.data, e.Timestamp, "", []string{e.Host, e.Visitor, e.City})
 		}
 
 		err := w.Write()
@@ -116,7 +116,7 @@ func BenchmarkWriteTenThousandEventsMuchBlocks(b *testing.B) {
 		w, _ := New("tmp/bench" + strconv.Itoa(i) + ".esdb")
 
 		for _, e := range visits {
-			w.Add([]byte(strconv.Itoa(rand.Intn(1000))), e.Timestamp, e.data, e.Host, []string{e.Host, e.Visitor, e.City})
+			w.Add([]byte(strconv.Itoa(rand.Intn(1000))), e.data, e.Timestamp, e.Host, []string{e.Host, e.Visitor, e.City})
 		}
 
 		err := w.Write()
@@ -135,7 +135,7 @@ func BenchmarkWriteHundredThousandEvents(b *testing.B) {
 		w, _ := New("tmp/bench" + strconv.Itoa(i) + ".esdb")
 
 		for _, e := range visits {
-			w.Add([]byte(e.EventType), e.Timestamp, e.data, e.Host, []string{e.Visitor, e.City})
+			w.Add([]byte(e.EventType), e.data, e.Timestamp, e.Host, []string{e.Visitor, e.City})
 		}
 
 		err := w.Write()
@@ -154,7 +154,7 @@ func BenchmarkWriteMillionEvents(b *testing.B) {
 		w, _ := New("tmp/bench" + strconv.Itoa(i) + ".esdb")
 
 		for _, e := range visits {
-			w.Add([]byte(e.EventType), e.Timestamp, e.data, e.Host, []string{e.Visitor, e.City})
+			w.Add([]byte(e.EventType), e.data, e.Timestamp, e.Host, []string{e.Visitor, e.City})
 		}
 
 		err := w.Write()

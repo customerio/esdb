@@ -57,12 +57,12 @@ func populate(w *Writer) {
 		newEvent(2, []byte("6")),
 	}
 
-	w.Add([]byte("a"), evs[0].Timestamp, evs[0].Data, "g", []string{"", "i1", "i2"})
-	w.Add([]byte("a"), evs[1].Timestamp, evs[1].Data, "h", []string{"", "i2"})
-	w.Add([]byte("a"), evs[2].Timestamp, evs[2].Data, "i", []string{"", "i1"})
-	w.Add([]byte("b"), evs[3].Timestamp, evs[3].Data, "g", []string{"", "i1"})
-	w.Add([]byte("b"), evs[4].Timestamp, evs[4].Data, "h", []string{"", "i1"})
-	w.Add([]byte("b"), evs[5].Timestamp, evs[5].Data, "i", []string{"", "i1", "i2"})
+	w.Add([]byte("a"), evs[0].Data, evs[0].Timestamp, "g", []string{"", "i1", "i2"})
+	w.Add([]byte("a"), evs[1].Data, evs[1].Timestamp, "h", []string{"", "i2"})
+	w.Add([]byte("a"), evs[2].Data, evs[2].Timestamp, "i", []string{"", "i1"})
+	w.Add([]byte("b"), evs[3].Data, evs[3].Timestamp, "g", []string{"", "i1"})
+	w.Add([]byte("b"), evs[4].Data, evs[4].Timestamp, "h", []string{"", "i1"})
+	w.Add([]byte("b"), evs[5].Data, evs[5].Timestamp, "i", []string{"", "i1", "i2"})
 }
 
 func TestBlockIndexes(t *testing.T) {

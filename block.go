@@ -19,102 +19,70 @@ type Block struct {
 }
 
 type index struct {
-	key   int
+	key   uint64
 	first uint64
 	last  uint64
 }
 
-func block(reader io.ReadSeeker, id []byte, offset, length uint64) *Block {
-	st, err := findBlockIndex(reader, offset, length)
-	if err != nil {
-		return nil
-	}
-
-	return &Block{
-		Id:     id,
-		index:  st,
-		buf:    newBuffer(reader, offset, offset+length, 4096),
-		offset: offset,
-	}
-}
-
-func (b *Block) Scan(group string, scanner Scanner) error {
-	if index := b.findIndex("g" + group); index != nil && index.first > 0 {
-		offset := b.offset + index.first
-
-		b.buf.Move(offset, 4096)
-
-		data := eventData(b.buf)
-
-		for event := decodeEvent(data); event != nil; event = decodeEvent(data) {
-			if !scanner(event) {
-				return nil
-			}
-
-			data = eventData(b.buf)
+func openBlock(reader io.ReadSeeker, id []byte, offset, length uint64) *Block {
+	if st, err := findBlockIndex(reader, offset, length); err == nil {
+		return &Block{
+			Id:     id,
+			index:  st,
+			buf:    newBuffer(reader, offset, offset+length, 4096),
+			offset: offset,
 		}
 	}
 
 	return nil
 }
 
-func eventData(buf *buffer) []byte {
-	return buf.Next(int(buf.Uvarint()))
+func (b *Block) Scan(grouping string, scanner Scanner) {
+	if index := b.findIndex("g" + grouping); index != nil {
+		b.scan(index.first, 0, 4096, scanner, false)
+	}
 }
 
-func (b *Block) ScanIndex(index string, scanner Scanner) error {
-	if index := b.findIndex("i" + index); index != nil && index.first > 0 {
-		offset := b.offset + index.first
+func (b *Block) ScanIndex(name string, scanner Scanner) {
+	if index := b.findIndex("i" + name); index != nil {
+		b.scan(index.first, index.key, 0, scanner, false)
+	}
+}
 
-		b.buf.Move(offset, 0)
+func (b *Block) RevScanIndex(name string, scanner Scanner) {
+	if index := b.findIndex("i" + name); index != nil {
+		b.scan(index.last, index.key, 0, scanner, true)
+	}
+}
 
-		data := eventData(b.buf)
+func (b *Block) scan(offset, key uint64, pageSize int, scanner Scanner, reverse bool) {
+	if offset == 0 {
+		return
+	}
 
-		for event := decodeEvent(data); event != nil; event = decodeEvent(data) {
-			if !scanner(event) {
-				return nil
-			}
+	b.buf.Move(b.offset+offset, pageSize)
 
-			if next := event.nextOffsets[index.key]; next > 0 {
-				offset = b.offset + next
-				b.buf.Move(offset, 0)
-				data = eventData(b.buf)
+	for event := nextEvent(b.buf); event != nil; {
+		if scanner(event) {
+			if reverse {
+				event = event.Prev(b.buf, key)
 			} else {
-				data = []byte{}
+				event = event.Next(b.buf, key)
 			}
+
+		} else {
+			return
 		}
 	}
-
-	return nil
-}
-
-func (b *Block) RevScanIndex(index string, scanner Scanner) error {
-	if index := b.findIndex("i" + index); index != nil && index.last > 0 {
-		offset := b.offset + index.last
-
-		b.buf.Move(offset, 0)
-		data := eventData(b.buf)
-
-		for event := decodeEvent(data); event != nil; event = decodeEvent(data) {
-			if !scanner(event) {
-				return nil
-			}
-
-			if prev := event.prevOffsets[index.key]; prev > 0 {
-				offset = b.offset + prev
-				b.buf.Move(offset, 0)
-				data = eventData(b.buf)
-			} else {
-				data = []byte{}
-			}
-		}
-	}
-
-	return nil
 }
 
 func (b *Block) findIndex(name string) *index {
 	if metadata, err := b.index.Get([]byte(name)); err == nil {
+		//return &index{
+		//  key: buf.Uvarint(),
+		//  first: buf.Uint64(),
+		//  last: buf.Uint64(),
+		//}
 		key, n := binary.Uvarint(metadata)
 
 		var first uint64
@@ -124,7 +92,7 @@ func (b *Block) findIndex(name string) *index {
 		binary.Read(bytes.NewReader(metadata[n+8:]), binary.LittleEndian, &last)
 
 		return &index{
-			key:   int(key),
+			key:   key,
 			first: first,
 			last:  last,
 		}

@@ -38,7 +38,7 @@ func Open(path string) (*Db, error) {
 func (db *Db) Find(id []byte) *Block {
 	if location, err := db.index.Get(id); err == nil {
 		loc := readLocation(location)
-		return block(
+		return openBlock(
 			db.file,
 			id,
 			loc[0],

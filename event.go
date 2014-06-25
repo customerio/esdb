@@ -46,8 +46,8 @@ type Event struct {
 	Data      []byte
 	Timestamp int
 
-	prevOffsets map[int]uint64
-	nextOffsets map[int]uint64
+	prevOffsets map[uint64]uint64
+	nextOffsets map[uint64]uint64
 
 	offset int64
 	prev   map[int]*Event
@@ -63,6 +63,11 @@ func newEvent(timestamp int, data []byte) *Event {
 	}
 }
 
+func nextEvent(buf *buffer) *Event {
+	bytes := buf.Next(int(buf.Uvarint()))
+	return decodeEvent(bytes)
+}
+
 func decodeEvent(encoded []byte) *Event {
 	if len(encoded) == 0 {
 		return nil
@@ -73,7 +78,7 @@ func decodeEvent(encoded []byte) *Event {
 	data := encoded[index : index+int(dataLen)]
 	index += int(dataLen)
 
-	event := &Event{Data: data, prevOffsets: make(map[int]uint64), nextOffsets: make(map[int]uint64)}
+	event := &Event{Data: data, prevOffsets: make(map[uint64]uint64), nextOffsets: make(map[uint64]uint64)}
 
 	var indexLen uint8
 	binary.Read(bytes.NewReader(encoded[index:index+1]), binary.LittleEndian, &indexLen)
@@ -90,11 +95,34 @@ func decodeEvent(encoded []byte) *Event {
 		binary.Read(bytes.NewReader(encoded[index:index+8]), binary.LittleEndian, &next)
 		index += 8
 
-		event.prevOffsets[int(key)] = prev
-		event.nextOffsets[int(key)] = next
+		event.prevOffsets[key] = prev
+		event.nextOffsets[key] = next
 	}
 
 	return event
+}
+
+func (e *Event) Next(buf *buffer, key uint64) *Event {
+	if key == 0 {
+		return nextEvent(buf)
+	} else if next := e.nextOffsets[key]; next > 0 {
+		buf.Move(buf.original+next, 0)
+		e := nextEvent(buf)
+		return e
+	}
+
+	return nil
+}
+
+func (e *Event) Prev(buf *buffer, key uint64) *Event {
+	if key == 0 {
+		return nextEvent(buf)
+	} else if prev := e.prevOffsets[key]; prev > 0 {
+		buf.Move(buf.original+prev, 0)
+		return nextEvent(buf)
+	}
+
+	return nil
 }
 
 func (e *Event) encode() []byte {

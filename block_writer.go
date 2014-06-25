@@ -17,32 +17,32 @@ type blockWriter struct {
 
 	written bool
 
-	groups    eventsMap
+	groupings eventsMap
 	indexes   eventsMap
 	indexKeys map[string]int
 }
 
 func newBlock(writer io.Writer, id []byte) *blockWriter {
 	return &blockWriter{
-		Id:      id,
-		writer:  writer,
-		groups:  make(eventsMap),
-		indexes: make(eventsMap),
+		Id:        id,
+		writer:    writer,
+		groupings: make(eventsMap),
+		indexes:   make(eventsMap),
 	}
 }
 
-func (w *blockWriter) add(timestamp int, data []byte, group string, indexes []string) error {
+func (w *blockWriter) add(data []byte, timestamp int, grouping string, indexes []string) error {
 	if w.written {
 		return errors.New("Cannot add to block. We're immutable and this one has already been written.")
 	}
 
 	event := newEvent(timestamp, data)
 
-	if w.groups[group] == nil {
-		w.groups[group] = make([]*Event, 0)
+	if w.groupings[grouping] == nil {
+		w.groupings[grouping] = make([]*Event, 0)
 	}
 
-	w.groups[group] = append(w.groups[group], event)
+	w.groupings[grouping] = append(w.groupings[grouping], event)
 
 	for _, name := range indexes {
 		if w.indexes[name] == nil {
@@ -83,11 +83,11 @@ func (w *blockWriter) generateIndexKeys() {
 	w.indexKeys = make(map[string]int)
 
 	for i, name := range w.indexes.keysSortedByEventCount() {
-		w.indexKeys["i"+name] = i
+		w.indexKeys["i"+name] = i + 1
 	}
 
-	for i, name := range w.groups.keysSortedByEventCount() {
-		w.indexKeys["g"+name] = i
+	for i, name := range w.groupings.keysSortedByEventCount() {
+		w.indexKeys["g"+name] = i + 1
 	}
 
 }
@@ -120,16 +120,16 @@ func (w *blockWriter) writeEvents(buf io.Writer) error {
 
 	offset = 1
 
-	groups := make(sort.StringSlice, 0, len(w.groups))
+	groupings := make(sort.StringSlice, 0, len(w.groupings))
 
-	for group, _ := range w.groups {
-		groups = append(groups, group)
+	for grouping, _ := range w.groupings {
+		groupings = append(groupings, grouping)
 	}
 
-	groups.Sort()
+	groupings.Sort()
 
-	for _, group := range groups {
-		events := w.groups[group]
+	for _, grouping := range groupings {
+		events := w.groupings[grouping]
 
 		sort.Stable(sort.Reverse(events))
 
@@ -141,8 +141,8 @@ func (w *blockWriter) writeEvents(buf io.Writer) error {
 		offset += 1
 	}
 
-	for _, group := range groups {
-		events := w.groups[group]
+	for _, grouping := range groupings {
+		events := w.groupings[grouping]
 
 		for _, event := range events {
 			if _, err := buf.Write(event.encode()); err != nil {
@@ -173,7 +173,7 @@ func (w *blockWriter) writeIndex(out io.Writer) error {
 		}
 	}
 
-	for name, events := range w.groups {
+	for name, events := range w.groupings {
 		record("g", name, events)
 	}
 	for name, events := range w.indexes {
@@ -204,6 +204,7 @@ func (w *blockWriter) writeIndex(out io.Writer) error {
 	}
 
 	binary.Write(buf, binary.LittleEndian, int32(buf.Len()))
+
 	_, err := buf.WriteTo(out)
 	return err
 }
