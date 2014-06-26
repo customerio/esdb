@@ -44,6 +44,14 @@ func (w *writeBuffer) Push(b []byte) {
 	w.Write(b)
 }
 
+func (w *writeBuffer) PushUint64(num int) {
+	binary.Write(w, binary.LittleEndian, uint64(num))
+}
+
+func (w *writeBuffer) PushUint16(num int) {
+	binary.Write(w, binary.LittleEndian, uint16(num))
+}
+
 func (b *buffer) Reset() {
 	b.start = b.original
 	b.offset = 0
@@ -71,6 +79,11 @@ func (b *buffer) PullUvarint64() uint64 {
 	return num
 }
 
+func (b *buffer) PullUint16() uint16 {
+	var num uint16
+	binary.Read(bytes.NewReader(b.Pull(2)), binary.LittleEndian, &num)
+	return num
+}
 func (b *buffer) PullUint32() uint32 {
 	var num uint32
 	binary.Read(bytes.NewReader(b.Pull(4)), binary.LittleEndian, &num)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/customerio/esdb/sst"
 )
@@ -17,40 +18,33 @@ type spaceWriter struct {
 
 	written bool
 
-	groupings map[string]events
-	indexes   map[string]events
+	groupings map[string]*index
+	indexes   map[string]*index
+}
+
+type index struct {
+	offset int
+	length int
+	evs    events
 }
 
 func newSpace(writer io.Writer, id []byte) *spaceWriter {
 	return &spaceWriter{
-		Id:        id,
-		writer:    writer,
-		groupings: make(map[string]events),
-		indexes:   make(map[string]events),
+		Id:      id,
+		writer:  writer,
+		indexes: make(map[string]*index),
 	}
 }
 
-func (w *spaceWriter) add(data []byte, timestamp int, grouping string, indexes map[string]string) error {
+func (w *spaceWriter) add(event *Event, grouping string, indexes map[string]string) error {
 	if w.written {
 		return errors.New("Cannot add to space. We're immutable and this one has already been written.")
 	}
 
-	event := newEvent(timestamp, data)
+	addEventToIndex(w.indexes, "g"+grouping, event)
 
-	if w.groupings[grouping] == nil {
-		w.groupings[grouping] = make([]*Event, 0)
-	}
-
-	w.groupings[grouping] = append(w.groupings[grouping], event)
-
-	for name, value := range indexes {
-		serialized := name + ":" + value
-
-		if w.indexes[serialized] == nil {
-			w.indexes[serialized] = make([]*Event, 0)
-		}
-
-		w.indexes[serialized] = append(w.indexes[serialized], event)
+	for name, val := range indexes {
+		addEventToIndex(w.indexes, "i"+name+":"+val, event)
 	}
 
 	return nil
@@ -61,110 +55,38 @@ func (w *spaceWriter) write() (int64, error) {
 		return 0, nil
 	}
 
-	w.written = true
-
 	buf := bytes.NewBuffer([]byte{42})
 
-	if err := w.writeEvents(uint64(buf.Len()), buf); err != nil {
+	for _, name := range sortIndexes(w.indexes) {
+		w.indexes[name].offset = buf.Len()
+
+		if strings.HasPrefix(name, "g") {
+			writeEventBlocks(w.indexes[name], buf)
+		} else {
+			writeIndexBlocks(w.indexes[name], buf)
+		}
+	}
+
+	if err := w.writeIndex(buf); err != nil {
 		return 0, err
 	}
-	if err := w.writeIndex(uint64(buf.Len()), buf); err != nil {
-		return 0, err
-	}
+
+	w.written = true
 
 	return buf.WriteTo(w.writer)
 }
 
-func (w *spaceWriter) writeEvents(offset uint64, writer io.Writer) error {
-	groupings := make(sort.StringSlice, 0, len(w.groupings))
-
-	for grouping, _ := range w.groupings {
-		groupings = append(groupings, grouping)
-	}
-
-	buf := newWriteBuffer([]byte{})
-
-	groupings.Sort()
-
-	for _, grouping := range groupings {
-		events := w.groupings[grouping]
-
-		sort.Stable(sort.Reverse(events))
-
-		for _, event := range events {
-			event.offset = offset + uint64(buf.Len())
-			event.push(buf)
-		}
-
-		buf.Push([]byte{0})
-	}
-
-	_, err := buf.WriteTo(writer)
-
-	return err
-}
-
-func (w *spaceWriter) writeIndex(offset uint64, out io.Writer) error {
+func (w *spaceWriter) writeIndex(out io.Writer) error {
 	buf := new(bytes.Buffer)
-
-	groupings := make(sort.StringSlice, 0)
-	indexes := make(sort.StringSlice, 0)
-	offsets := make(map[string]uint64)
-	lengths := make(map[string]uint64)
-
-	scratch := make([]byte, 8)
-
-	for name, _ := range w.groupings {
-		groupings = append(groupings, name)
-	}
-
-	for name, events := range w.indexes {
-		indexes = append(indexes, name)
-
-		sort.Stable(events)
-
-		offsets[name] = offset
-
-		for _, event := range events {
-			binary.Write(buf, binary.LittleEndian, uint64(event.offset))
-			lengths[name] += 8
-		}
-
-		offset += lengths[name]
-	}
-
-	if _, err := buf.WriteTo(out); err != nil {
-		return err
-	}
-
-	groupings.Sort()
-	indexes.Sort()
-
-	buf = new(bytes.Buffer)
 	st := sst.NewWriter(buf)
 
-	for _, name := range groupings {
-		events := w.groupings[name]
+	for _, name := range sortIndexes(w.indexes) {
+		buf := newWriteBuffer([]byte{})
 
-		b := new(bytes.Buffer)
+		buf.PushUvarint(w.indexes[name].offset)
+		buf.PushUvarint(w.indexes[name].length)
 
-		n := binary.PutUvarint(scratch, events[0].offset)
-		b.Write(scratch[:n])
-
-		if err := st.Set([]byte("g"+name), b.Bytes()); err != nil {
-			return err
-		}
-	}
-
-	for _, name := range indexes {
-		b := new(bytes.Buffer)
-
-		n := binary.PutUvarint(scratch, offsets[name])
-		b.Write(scratch[:n])
-		n = binary.PutUvarint(scratch, lengths[name])
-		b.Write(scratch[:n])
-
-		if err := st.Set([]byte("i"+name), b.Bytes()); err != nil {
+		if err := st.Set([]byte(name), buf.Bytes()); err != nil {
 			return err
 		}
 	}
@@ -177,4 +99,24 @@ func (w *spaceWriter) writeIndex(offset uint64, out io.Writer) error {
 
 	_, err := buf.WriteTo(out)
 	return err
+}
+
+func addEventToIndex(indexes map[string]*index, name string, event *Event) {
+	if indexes[name] == nil {
+		indexes[name] = &index{evs: make(events, 0, 1)}
+	}
+
+	indexes[name].evs = append(indexes[name].evs, event)
+}
+
+func sortIndexes(indexes map[string]*index) []string {
+	names := make(sort.StringSlice, 0, len(indexes))
+
+	for name, _ := range indexes {
+		names = append(names, name)
+	}
+
+	sort.Stable(names)
+
+	return names
 }

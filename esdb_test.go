@@ -49,12 +49,12 @@ func createDb() *Db {
 
 func populate(w *Writer) {
 	evs = events{
-		newEvent(2, []byte("1")),
-		newEvent(3, []byte("2")),
-		newEvent(1, []byte("3")),
-		newEvent(1, []byte("4")),
-		newEvent(1, []byte("5")),
-		newEvent(2, []byte("6")),
+		newEvent([]byte("1"), 2),
+		newEvent([]byte("2"), 3),
+		newEvent([]byte("3"), 1),
+		newEvent([]byte("4"), 1),
+		newEvent([]byte("5"), 1),
+		newEvent([]byte("6"), 2),
 	}
 
 	w.Add([]byte("a"), evs[0].Data, evs[0].Timestamp, "g", map[string]string{"ts": "", "i": "i1"})

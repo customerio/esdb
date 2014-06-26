@@ -45,7 +45,7 @@ func (w *Writer) Add(spaceId []byte, data []byte, timestamp int, grouping string
 		w.spaces[string(spaceId)] = space
 	}
 
-	return space.add(data, timestamp, grouping, indexes)
+	return space.add(newEvent(data, timestamp), grouping, indexes)
 }
 
 func (w *Writer) Flush(spaceId []byte) (err error) {

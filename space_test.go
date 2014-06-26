@@ -17,14 +17,14 @@ func create(id []byte) *Space {
 
 func populateSpace(space *spaceWriter) {
 	es := events{
-		newEvent(2, []byte("1")),
-		newEvent(3, []byte("2")),
-		newEvent(1, []byte("3")),
+		newEvent([]byte("1"), 2),
+		newEvent([]byte("2"), 3),
+		newEvent([]byte("3"), 1),
 	}
 
-	space.add(es[0].Data, es[0].Timestamp, "a", map[string]string{"ts": "", "i": "i1"})
-	space.add(es[1].Data, es[1].Timestamp, "b", map[string]string{"ts": "", "i": "i2"})
-	space.add(es[2].Data, es[2].Timestamp, "b", map[string]string{"ts": "", "i": "i1"})
+	space.add(es[0], "a", map[string]string{"ts": "", "i": "i1"})
+	space.add(es[1], "b", map[string]string{"ts": "", "i": "i2"})
+	space.add(es[2], "b", map[string]string{"ts": "", "i": "i1"})
 }
 
 func fetchPrimary(space *Space, primary string) []string {
@@ -57,7 +57,7 @@ func fetchIndex(space *Space, index, value string, reverse bool) []string {
 	return found
 }
 
-func TestSpace(t *testing.T) {
+func TestSpaceIndexScanning(t *testing.T) {
 	space := create([]byte("a"))
 
 	var tests = []struct {

@@ -9,11 +9,12 @@ func (e events) Swap(i, j int)      { e[i], e[j] = e[j], e[i] }
 type Event struct {
 	Data      []byte
 	Timestamp int
-	offset    uint64
+	block     int
+	offset    int
 }
 
-func newEvent(timestamp int, data []byte) *Event {
-	return &Event{data, timestamp, 0}
+func newEvent(data []byte, timestamp int) *Event {
+	return &Event{data, timestamp, 0, 0}
 }
 
 func pullEvent(buf *buffer) (e *Event) {
