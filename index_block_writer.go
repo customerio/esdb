@@ -6,7 +6,7 @@ import (
 )
 
 func writeIndexBlocks(i *index, out io.Writer) (blocks []int) {
-	sort.Stable(sort.Reverse(i.evs))
+	sort.Stable(i.evs)
 
 	buf := newWriteBuffer([]byte{})
 	blocks = make([]int, 0)

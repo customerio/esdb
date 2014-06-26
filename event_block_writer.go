@@ -19,7 +19,7 @@ func writeEventBlocks(i *index, out io.Writer) (blocks int) {
 	}
 
 	for _, event := range i.evs {
-		event.block = i.length
+		event.block = i.offset + i.length
 		event.offset = buf.Len()
 		event.push(buf)
 		write(4096)

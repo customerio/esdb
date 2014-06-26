@@ -47,35 +47,44 @@ func (s *Space) Scan(grouping string, scanner Scanner) {
 
 func (s *Space) ScanIndex(name, value string, scanner Scanner) {
 	if buf := s.findIndex(name, value); buf != nil {
-		for offset := buf.PullUint64(); offset > 0; {
-			s.buf.Move(s.offset+offset, 0)
+		block := buf.PullUint64()
+		offset := uint64(buf.PullUint16())
+
+		for block+offset > 0 {
+			s.buf.Move(s.offset+block+offset, 0)
 
 			if !scanner(pullEvent(s.buf)) {
 				return
 			}
 
-			offset = buf.PullUint64()
+			block = buf.PullUint64()
+			offset = uint64(buf.PullUint16())
 		}
 	}
 }
 
 func (s *Space) RevScanIndex(name, value string, scanner Scanner) {
 	if buf := s.findIndex(name, value); buf != nil {
-		for offset := buf.PopUint64(); offset > 0; {
-			s.buf.Move(s.offset+offset, 0)
+		offset := uint64(buf.PopUint16())
+		block := buf.PopUint64()
+
+		for block+offset > 0 {
+			s.buf.Move(s.offset+block+offset, 0)
 
 			if !scanner(pullEvent(s.buf)) {
 				return
 			}
 
-			offset = buf.PopUint64()
+			offset = uint64(buf.PopUint16())
+			block = buf.PopUint64()
 		}
 	}
 }
 
 func (s *Space) findGroupingOffset(name string) uint64 {
-	if value, err := s.index.Get([]byte("g" + name)); err == nil {
-		return newByteBuffer(value).PullUvarint64()
+	if val, err := s.index.Get([]byte("g" + name)); err == nil {
+		buf := newByteBuffer(val)
+		return buf.PullUvarint64()
 	}
 
 	return 0

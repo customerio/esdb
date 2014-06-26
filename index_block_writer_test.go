@@ -28,17 +28,17 @@ func TestWriteIndexBlocksSmall(t *testing.T) {
 	}
 
 	expected := []byte(
-		"\xF8\x00\x00\x00\x00\x00\x00\x00" + "\x00\x04" +
-			"\x00\x02\x00\x00\x00\x00\x00\x00" + "\x80\x00" +
+		"\x00\x00\x00\x00\x00\x00\x00\x00" + "\x00\x08" +
 			"\x00\x08\x00\x00\x00\x00\x00\x00" + "\x00\x02" +
-			"\x00\x00\x00\x00\x00\x00\x00\x00" + "\x00\x08",
+			"\x00\x02\x00\x00\x00\x00\x00\x00" + "\x80\x00" +
+			"\xF8\x00\x00\x00\x00\x00\x00\x00" + "\x00\x04",
 	)
 
 	if !reflect.DeepEqual(w.Bytes(), expected) {
 		t.Errorf("Wrong event block bytecode:\n wanted: %x\n found:  %x", expected, w.Bytes())
 	}
 
-	want := events{e4, e2, e3, e1}
+	want := events{e1, e3, e2, e4}
 
 	if !reflect.DeepEqual(index.evs, want) {
 		t.Errorf("Wrongly sorted events: wanted: %v found: %v", want, index.evs)

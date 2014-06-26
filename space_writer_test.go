@@ -96,8 +96,8 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		indexed events
 	}{
 		{"g1", 1, 13, events{e4, e2, e3, e1}, nil},
-		{"ia:1", 14, 20, nil, events{e4, e1}},
-		{"ia:2", 34, 20, nil, events{e2, e3}},
+		{"ia:1", 14, 20, nil, events{e1, e4}},
+		{"ia:2", 34, 20, nil, events{e3, e2}},
 	}
 
 	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, uint64(w.Len()))

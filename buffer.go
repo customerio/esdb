@@ -84,6 +84,13 @@ func (b *buffer) PullUint16() uint16 {
 	binary.Read(bytes.NewReader(b.Pull(2)), binary.LittleEndian, &num)
 	return num
 }
+
+func (b *buffer) PopUint16() uint16 {
+	var num uint16
+	binary.Read(bytes.NewReader(b.Pop(2)), binary.LittleEndian, &num)
+	return num
+}
+
 func (b *buffer) PullUint32() uint32 {
 	var num uint32
 	binary.Read(bytes.NewReader(b.Pull(4)), binary.LittleEndian, &num)
