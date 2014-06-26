@@ -125,7 +125,7 @@ func BenchmarkWriteTenThousandEventsNoIndexes(b *testing.B) {
 		}
 	}
 }
-func BenchmarkWriteTenThousandEventsMuchBlocks(b *testing.B) {
+func BenchmarkWriteTenThousandEventsMuchSpaces(b *testing.B) {
 	visits := readVisits("testdata/ten_thousand_visits.csv", 10000)
 
 	b.ResetTimer()

@@ -12,10 +12,10 @@ import (
 
 type Writer struct {
 	file         *os.File
-	blocks       map[string]*blockWriter
+	spaces       map[string]*spaceWriter
 	offset       int64
-	blockOffsets map[string]int64
-	blockLengths map[string]int64
+	spaceOffsets map[string]int64
+	spaceLengths map[string]int64
 	written      bool
 }
 
@@ -27,38 +27,38 @@ func New(path string) (*Writer, error) {
 
 	return &Writer{
 		file:         file,
-		blocks:       make(map[string]*blockWriter),
-		blockOffsets: make(map[string]int64),
-		blockLengths: make(map[string]int64),
+		spaces:       make(map[string]*spaceWriter),
+		spaceOffsets: make(map[string]int64),
+		spaceLengths: make(map[string]int64),
 	}, nil
 }
 
-func (w *Writer) Add(blockId []byte, data []byte, timestamp int, grouping string, indexes map[string]string) error {
+func (w *Writer) Add(spaceId []byte, data []byte, timestamp int, grouping string, indexes map[string]string) error {
 	if w.written {
 		return errors.New("Cannot add to database. We're immutable and this one has already been written.")
 	}
 
-	block := w.blocks[string(blockId)]
+	space := w.spaces[string(spaceId)]
 
-	if block == nil {
-		block = newBlock(w.file, blockId)
-		w.blocks[string(blockId)] = block
+	if space == nil {
+		space = newSpace(w.file, spaceId)
+		w.spaces[string(spaceId)] = space
 	}
 
-	return block.add(data, timestamp, grouping, indexes)
+	return space.add(data, timestamp, grouping, indexes)
 }
 
-func (w *Writer) Flush(blockId []byte) (err error) {
-	if block := w.blocks[string(blockId)]; block != nil {
-		err = w.writeBlock(block)
+func (w *Writer) Flush(spaceId []byte) (err error) {
+	if space := w.spaces[string(spaceId)]; space != nil {
+		err = w.writeSpace(space)
 	}
 
 	return
 }
 
 func (w *Writer) Write() (err error) {
-	for _, block := range w.blocks {
-		if err = w.writeBlock(block); err != nil {
+	for _, space := range w.spaces {
+		if err = w.writeSpace(space); err != nil {
 			return
 		}
 	}
@@ -71,23 +71,23 @@ func (w *Writer) write() error {
 
 	buf := new(bytes.Buffer)
 
-	blockIds := make(sort.StringSlice, 0)
+	spaceIds := make(sort.StringSlice, 0)
 
-	for _, block := range w.blocks {
-		blockIds = append(blockIds, string(block.Id))
+	for _, space := range w.spaces {
+		spaceIds = append(spaceIds, string(space.Id))
 	}
 
-	blockIds.Sort()
+	spaceIds.Sort()
 
 	st := sst.NewWriter(buf)
 
-	for _, blockId := range blockIds {
+	for _, spaceId := range spaceIds {
 		b := new(bytes.Buffer)
 
-		binary.Write(b, binary.LittleEndian, w.blockOffsets[blockId])
-		binary.Write(b, binary.LittleEndian, w.blockLengths[blockId])
+		binary.Write(b, binary.LittleEndian, w.spaceOffsets[spaceId])
+		binary.Write(b, binary.LittleEndian, w.spaceLengths[spaceId])
 
-		if err := st.Set([]byte(blockId), b.Bytes()); err != nil {
+		if err := st.Set([]byte(spaceId), b.Bytes()); err != nil {
 			return err
 		}
 	}
@@ -101,12 +101,12 @@ func (w *Writer) write() error {
 	return err
 }
 
-func (w *Writer) writeBlock(block *blockWriter) (err error) {
-	length, err := block.write()
+func (w *Writer) writeSpace(space *spaceWriter) (err error) {
+	length, err := space.write()
 
 	if err == nil {
-		w.blockOffsets[string(block.Id)] = w.offset
-		w.blockLengths[string(block.Id)] = length
+		w.spaceOffsets[string(space.Id)] = w.offset
+		w.spaceLengths[string(space.Id)] = length
 		w.offset += length
 	}
 

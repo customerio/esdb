@@ -8,13 +8,13 @@ import (
 	"testing"
 )
 
-func fetchBlockIndex(db *Db, id []byte, index, value string) []string {
+func fetchSpaceIndex(db *Db, id []byte, index, value string) []string {
 	found := make([]string, 0)
 
-	block := db.Find(id)
+	space := db.Find(id)
 
-	if block != nil {
-		block.ScanIndex(index, value, func(event *Event) bool {
+	if space != nil {
+		space.ScanIndex(index, value, func(event *Event) bool {
 			found = append(found, string(event.Data))
 			return true
 		})
@@ -65,7 +65,7 @@ func populate(w *Writer) {
 	w.Add([]byte("b"), evs[5].Data, evs[5].Timestamp, "i", map[string]string{"ts": "", "i": "i1"})
 }
 
-func TestBlockIndexes(t *testing.T) {
+func TestSpaceIndexes(t *testing.T) {
 	db := createDb()
 
 	var tests = []struct {
@@ -85,7 +85,7 @@ func TestBlockIndexes(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		found := fetchBlockIndex(db, []byte(test.id), test.index, test.value)
+		found := fetchSpaceIndex(db, []byte(test.id), test.index, test.value)
 
 		if !reflect.DeepEqual(test.want, found) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.want, found)

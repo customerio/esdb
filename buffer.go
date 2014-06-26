@@ -18,12 +18,30 @@ type buffer struct {
 	pageSize  int
 }
 
+type writeBuffer struct {
+	*bytes.Buffer
+}
+
 func newBuffer(r io.ReadSeeker, start, limit uint64, pageSize int) *buffer {
 	return &buffer{r, bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{}), start, start, limit, 0, limit, pageSize}
 }
 
 func newByteBuffer(b []byte) *buffer {
 	return newBuffer(bytes.NewReader(b), 0, uint64(len(b)), len(b))
+}
+
+func newWriteBuffer(b []byte) *writeBuffer {
+	return &writeBuffer{bytes.NewBuffer(b)}
+}
+
+func (w *writeBuffer) PushUvarint(num int) {
+	b := make([]byte, 8)
+	n := binary.PutUvarint(b, uint64(num))
+	w.Write(b[:n])
+}
+
+func (w *writeBuffer) Push(b []byte) {
+	w.Write(b)
 }
 
 func (b *buffer) Reset() {
@@ -41,7 +59,11 @@ func (b *buffer) Move(start uint64, pageSize int) {
 	b.buf.Reset()
 }
 
-func (b *buffer) PullUvarint() uint64 {
+func (b *buffer) PullUvarint() int {
+	return int(b.PullUvarint64())
+}
+
+func (b *buffer) PullUvarint64() uint64 {
 	b.ensure(10)
 
 	num, n := binary.Uvarint(b.Bytes()[:10])
@@ -114,7 +136,7 @@ func (b *buffer) ensure(num int) {
 	}
 
 	for b.Len() < num && b.offset < b.limit-b.start {
-		b.buf.ReadFrom(b.nextBlock(request))
+		b.buf.ReadFrom(b.nextSpace(request))
 	}
 }
 
@@ -126,11 +148,11 @@ func (b *buffer) ensureEnd(num int) {
 	}
 
 	for b.endBuf.Len() < num && b.endOffset > b.start {
-		b.endBuf.ReadFrom(b.prevBlock(request))
+		b.endBuf.ReadFrom(b.prevSpace(request))
 	}
 }
 
-func (b *buffer) nextBlock(requested int) io.Reader {
+func (b *buffer) nextSpace(requested int) io.Reader {
 	start := b.start + b.offset + uint64(b.Len())
 
 	if start > b.limit {
@@ -151,7 +173,7 @@ func (b *buffer) nextBlock(requested int) io.Reader {
 	return bytes.NewReader(data)
 }
 
-func (b *buffer) prevBlock(requested int) io.Reader {
+func (b *buffer) prevSpace(requested int) io.Reader {
 	current := b.endOffset - uint64(b.endBuf.Len())
 
 	var start uint64

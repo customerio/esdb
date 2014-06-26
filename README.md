@@ -79,7 +79,7 @@ func main() {
 		value, _ := json.Marshal(e.data)
 
 		writer.Add(
-			[]byte(e.customerId), // block the event will be stored under.
+			[]byte(e.customerId), // space the event will be stored under.
 			value,                // value can be any binary data.
 			e.timestamp,          // all events will be stored sorted by this value.
 			"",                   // grouping. "" here means no grouping, store sequentially by timestamp.
@@ -173,7 +173,7 @@ forward and backwards.
 each event stored. The 17 byte secondary index overhead is only applied for
 indexes which the particular event is apart.
    
-   File overhead: offset information based on the number of blocks and
+   File overhead: offset information based on the number of spaces and
 groupings which are created is maintained at the end of the file. Generally, in
 a reasonably sized file, this should be negligible as event data and per event
 overhead should be the main driver of file size.

@@ -45,7 +45,7 @@ func ExampleDb() {
 		value, _ := json.Marshal(e.data)
 
 		writer.Add(
-			[]byte(e.customerId), // block the event will be stored under.
+			[]byte(e.customerId), // space the event will be stored under.
 			value,                // value can be any binary data.
 			e.timestamp,          // all events will be stored sorted by this value.
 			"",                   // grouping. "" here means no grouping, store sequentially by timestamp.

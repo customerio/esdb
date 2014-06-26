@@ -10,7 +10,7 @@ import (
 	"github.com/customerio/esdb/sst"
 )
 
-type blockWriter struct {
+type spaceWriter struct {
 	Id []byte
 
 	writer io.Writer
@@ -21,8 +21,8 @@ type blockWriter struct {
 	indexes   map[string]events
 }
 
-func newBlock(writer io.Writer, id []byte) *blockWriter {
-	return &blockWriter{
+func newSpace(writer io.Writer, id []byte) *spaceWriter {
+	return &spaceWriter{
 		Id:        id,
 		writer:    writer,
 		groupings: make(map[string]events),
@@ -30,9 +30,9 @@ func newBlock(writer io.Writer, id []byte) *blockWriter {
 	}
 }
 
-func (w *blockWriter) add(data []byte, timestamp int, grouping string, indexes map[string]string) error {
+func (w *spaceWriter) add(data []byte, timestamp int, grouping string, indexes map[string]string) error {
 	if w.written {
-		return errors.New("Cannot add to block. We're immutable and this one has already been written.")
+		return errors.New("Cannot add to space. We're immutable and this one has already been written.")
 	}
 
 	event := newEvent(timestamp, data)
@@ -56,16 +56,14 @@ func (w *blockWriter) add(data []byte, timestamp int, grouping string, indexes m
 	return nil
 }
 
-func (w *blockWriter) write() (int64, error) {
+func (w *spaceWriter) write() (int64, error) {
 	if w.written {
 		return 0, nil
 	}
 
 	w.written = true
 
-	buf := new(bytes.Buffer)
-
-	buf.Write([]byte{42})
+	buf := bytes.NewBuffer([]byte{42})
 
 	if err := w.writeEvents(uint64(buf.Len()), buf); err != nil {
 		return 0, err
@@ -77,12 +75,14 @@ func (w *blockWriter) write() (int64, error) {
 	return buf.WriteTo(w.writer)
 }
 
-func (w *blockWriter) writeEvents(offset uint64, buf io.Writer) error {
+func (w *spaceWriter) writeEvents(offset uint64, writer io.Writer) error {
 	groupings := make(sort.StringSlice, 0, len(w.groupings))
 
 	for grouping, _ := range w.groupings {
 		groupings = append(groupings, grouping)
 	}
+
+	buf := newWriteBuffer([]byte{})
 
 	groupings.Sort()
 
@@ -92,23 +92,19 @@ func (w *blockWriter) writeEvents(offset uint64, buf io.Writer) error {
 		sort.Stable(sort.Reverse(events))
 
 		for _, event := range events {
-			event.offset = offset
-
-			offset += event.length()
-
-			if _, err := buf.Write(event.encode()); err != nil {
-				return err
-			}
+			event.offset = offset + uint64(buf.Len())
+			event.push(buf)
 		}
 
-		buf.Write([]byte{0})
-		offset += 1
+		buf.Push([]byte{0})
 	}
 
-	return nil
+	_, err := buf.WriteTo(writer)
+
+	return err
 }
 
-func (w *blockWriter) writeIndex(offset uint64, out io.Writer) error {
+func (w *spaceWriter) writeIndex(offset uint64, out io.Writer) error {
 	buf := new(bytes.Buffer)
 
 	groupings := make(sort.StringSlice, 0)

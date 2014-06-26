@@ -35,10 +35,10 @@ func Open(path string) (*Db, error) {
 	}, nil
 }
 
-func (db *Db) Find(id []byte) *Block {
+func (db *Db) Find(id []byte) *Space {
 	if location, err := db.index.Get(id); err == nil {
 		loc := readLocation(location)
-		return openBlock(
+		return openSpace(
 			db.file,
 			id,
 			loc[0],

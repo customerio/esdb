@@ -1,10 +1,5 @@
 package esdb
 
-import (
-	"bytes"
-	"encoding/binary"
-)
-
 type events []*Event
 
 func (e events) Len() int           { return len(e) }
@@ -21,39 +16,18 @@ func newEvent(timestamp int, data []byte) *Event {
 	return &Event{data, timestamp, 0}
 }
 
-func nextEvent(buf *buffer) *Event {
-	bytes := buf.Pull(int(buf.PullUvarint()))
-	return decodeEvent(bytes)
-}
+func pullEvent(buf *buffer) (e *Event) {
+	size := buf.PullUvarint()
+	data := buf.Pull(size)
 
-func decodeEvent(encoded []byte) *Event {
-	if len(encoded) == 0 {
-		return nil
+	if len(data) > 0 {
+		e = &Event{Data: data}
 	}
 
-	dataLen, n := binary.Uvarint(encoded)
-
-	data := encoded[n : n+int(dataLen)]
-	n += int(dataLen)
-
-	return &Event{Data: data}
+	return
 }
 
-func (e *Event) encode() []byte {
-	buf := new(bytes.Buffer)
-
-	buf.Write(varInt(len(e.Data)))
-	buf.Write(e.Data)
-
-	return append(varInt(buf.Len()), buf.Bytes()...)
-}
-
-func (e *Event) length() uint64 {
-	return uint64(len(e.encode()))
-}
-
-func varInt(n int) []byte {
-	bytes := make([]byte, 8)
-	written := binary.PutUvarint(bytes, uint64(n))
-	return bytes[:written]
+func (e *Event) push(buf *writeBuffer) {
+	buf.PushUvarint(len(e.Data))
+	buf.Push(e.Data)
 }

@@ -281,8 +281,16 @@ func TestReadUvarints(t *testing.T) {
 
 	buf := newBuffer(bytes.NewReader(data), 0, 100, 16)
 
-	for _, expected := range []uint64{1234567890, 867, 5, 9001, 0} {
+	for _, expected := range []int{1234567890, 867, 5, 9001, 0} {
 		if found := buf.PullUvarint(); found != expected {
+			t.Errorf("Wanted: %v, found: %v", expected, found)
+		}
+	}
+
+	buf.Reset()
+
+	for _, expected := range []uint64{1234567890, 867, 5, 9001, 0} {
+		if found := buf.PullUvarint64(); found != expected {
 			t.Errorf("Wanted: %v, found: %v", expected, found)
 		}
 	}
