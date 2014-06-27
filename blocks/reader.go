@@ -36,6 +36,15 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	return
 }
 
+func (r *Reader) ReadBlock(offset int64) ([]byte, error) {
+	r.Seek(offset, 0)
+
+	block := make([]byte, r.blockSize)
+	n, err := r.Read(block)
+
+	return block[:n], err
+}
+
 func (r *Reader) fetch(length int) error {
 	for r.buffer.Len() < length {
 		block := make([]byte, headerLen(r.blockSize)+r.blockSize)
