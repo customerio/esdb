@@ -52,7 +52,7 @@ func populate(w *Writer) {
 		newEvent([]byte("1"), 2),
 		newEvent([]byte("2"), 3),
 		newEvent([]byte("3"), 1),
-		newEvent([]byte("4"), 1),
+		newEvent([]byte("4"), 3),
 		newEvent([]byte("5"), 1),
 		newEvent([]byte("6"), 2),
 	}
@@ -74,11 +74,11 @@ func TestSpaceIndexes(t *testing.T) {
 		value string
 		want  []string
 	}{
-		{"a", "ts", "", []string{"3", "1", "2"}},
-		{"a", "i", "i1", []string{"3", "1"}},
+		{"a", "ts", "", []string{"2", "1", "3"}},
+		{"a", "i", "i1", []string{"1", "3"}},
 		{"a", "i", "i2", []string{"2"}},
-		{"b", "ts", "", []string{"4", "5", "6"}},
-		{"b", "i", "i1", []string{"4", "5", "6"}},
+		{"b", "ts", "", []string{"4", "6", "5"}},
+		{"b", "i", "i1", []string{"4", "6", "5"}},
 		{"b", "i", "i2", []string{}},
 		{"b", "i", "i3", []string{}},
 		{"c", "ts", "", []string{}},

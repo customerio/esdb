@@ -40,16 +40,10 @@ func fetchPrimary(space *Space, primary string) []string {
 	return found
 }
 
-func fetchIndex(space *Space, index, value string, reverse bool) []string {
+func fetchIndex(space *Space, index, value string) []string {
 	found := make([]string, 0)
 
-	fetch := space.ScanIndex
-
-	if reverse {
-		fetch = space.RevScanIndex
-	}
-
-	fetch(index, value, func(event *Event) bool {
+	space.ScanIndex(index, value, func(event *Event) bool {
 		found = append(found, string(event.Data))
 		return true
 	})
@@ -61,22 +55,18 @@ func TestSpaceIndexScanning(t *testing.T) {
 	space := create([]byte("a"))
 
 	var tests = []struct {
-		index   string
-		value   string
-		want    []string
-		reverse bool
+		index string
+		value string
+		want  []string
 	}{
-		{"ts", "", []string{"3", "1", "2"}, false},
-		{"i", "i1", []string{"3", "1"}, false},
-		{"i", "i2", []string{"2"}, false},
-		{"i", "i3", []string{}, false},
-		{"ts", "", []string{"2", "1", "3"}, true},
-		{"i", "i1", []string{"1", "3"}, true},
-		{"i", "i2", []string{"2"}, true},
+		{"ts", "", []string{"2", "1", "3"}},
+		{"i", "i1", []string{"1", "3"}},
+		{"i", "i2", []string{"2"}},
+		{"i", "i3", []string{}},
 	}
 
 	for i, test := range tests {
-		found := fetchIndex(space, test.index, test.value, test.reverse)
+		found := fetchIndex(space, test.index, test.value)
 
 		if !reflect.DeepEqual(test.want, found) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.want, found)

@@ -86,9 +86,9 @@ func ExampleDb() {
 		return true // continue
 	})
 
-	// Just retrieve customer 3's clicks ordered descending
+	// Just retrieve customer 3's clicks
 	fmt.Println("\nclicks for 3:")
-	db.Find([]byte("3")).RevScanIndex("type", "click", func(event *Event) bool {
+	db.Find([]byte("3")).ScanIndex("type", "click", func(event *Event) bool {
 		fmt.Println(string(event.Data))
 		return true // continue
 	})

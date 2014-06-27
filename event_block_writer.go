@@ -1,6 +1,7 @@
 package esdb
 
 import (
+	"bytes"
 	"io"
 	"sort"
 
@@ -13,7 +14,7 @@ func writeEventBlocks(i *index, out io.Writer) (count int) {
 	writer := blocks.NewWriter(out, 4096)
 
 	for _, event := range i.evs {
-		buf := newWriteBuffer([]byte{})
+		buf := new(bytes.Buffer)
 
 		event.block = i.offset + writer.Written
 		event.offset = writer.Buffered()

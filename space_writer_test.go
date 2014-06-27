@@ -1,7 +1,9 @@
 package esdb
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/binary"
 	"reflect"
 	"testing"
 
@@ -50,24 +52,25 @@ func TestWriteSpaceGrouping(t *testing.T) {
 
 	for i, test := range tests {
 		val, _ := sst.Get([]byte(test.key))
-		buf := newBuffer(bytes.NewReader(val), 0, uint64(len(val)), 0)
+		buf := bufio.NewReader(bytes.NewReader(val))
 
-		offset := buf.PullUvarint()
-		length := buf.PullUvarint()
+		offset, _ := binary.ReadUvarint(buf)
+		length, _ := binary.ReadUvarint(buf)
 
-		if offset != test.offset || length != test.length {
+		if int(offset) != test.offset || int(length) != test.length {
 			t.Errorf("Case %d: Wrong grouping encoding: want: %d,%d found: %d,%d", i, test.offset, test.length, offset, length)
 		}
 
-		buf = newBuffer(blocks.NewByteReader(w.Bytes(), 4096), uint64(offset), uint64(offset+length), 0)
+		reader := blocks.NewByteReader(w.Bytes(), 4096)
+		reader.Seek(int64(offset), 0)
 
 		for j, event := range test.evs {
-			if e := pullEvent(buf); !reflect.DeepEqual(e.Data, event.Data) {
+			if e := pullEvent(reader); !reflect.DeepEqual(e.Data, event.Data) {
 				t.Errorf("Case %d/%d: Wrong event found: want: %s found: %s", i, j, event.Data, e.Data)
 			}
 		}
 
-		if e := pullEvent(buf); e != nil {
+		if e := pullEvent(reader); e != nil {
 			t.Errorf("Wrong event found: want: nil found: %s", e.Data)
 		}
 	}
@@ -98,8 +101,8 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		indexed events
 	}{
 		{"g1", 1, 15, events{e4, e2, e3, e1}, nil},
-		{"ia:1", 16, 24, nil, events{e1, e4}},
-		{"ia:2", 40, 24, nil, events{e3, e2}},
+		{"ia:1", 16, 23, nil, events{e4, e1}},
+		{"ia:2", 39, 23, nil, events{e2, e3}},
 	}
 
 	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, uint64(w.Len()))
@@ -107,35 +110,36 @@ func TestWriteSpaceIndexes(t *testing.T) {
 	for i, test := range tests {
 		val, _ := sst.Get([]byte(test.key))
 
-		buf := newBuffer(bytes.NewReader(val), 0, uint64(len(val)), 0)
+		buf := bufio.NewReader(bytes.NewReader(val))
 
-		offset := buf.PullUvarint()
-		length := buf.PullUvarint()
+		offset, _ := binary.ReadUvarint(buf)
+		length, _ := binary.ReadUvarint(buf)
 
-		if offset != test.offset || length != test.length {
+		if int(offset) != test.offset || int(length) != test.length {
 			t.Errorf("Case %d: Wrong grouping encoding: want: %d,%d found: %d,%d", i, test.offset, test.length, offset, length)
 		}
 
-		buf = newBuffer(blocks.NewByteReader(w.Bytes(), 4096), uint64(offset), uint64(offset+length), 0)
+		reader := blocks.NewByteReader(w.Bytes(), 4096)
+		reader.Seek(int64(offset), 0)
 
 		if len(test.evs) > 0 {
 			for j, event := range test.evs {
-				if e := pullEvent(buf); !reflect.DeepEqual(e.Data, event.Data) {
+				if e := pullEvent(reader); !reflect.DeepEqual(e.Data, event.Data) {
 					t.Errorf("Case %d/%d: Wrong event found: want: %s found: %s", i, j, event.Data, e.Data)
 				}
 			}
 
-			if e := pullEvent(buf); e != nil {
+			if e := pullEvent(reader); e != nil {
 				t.Errorf("Wrong event found: want: nil found: %s", e.Data)
 			}
 		}
 
-		buf.Pull(1)
-
 		for j, event := range test.indexed {
 
-			block := buf.PullUint64()
-			offset := buf.PullUint16()
+			var block uint64
+			var offset uint16
+			binary.Read(reader, binary.LittleEndian, &block)
+			binary.Read(reader, binary.LittleEndian, &offset)
 
 			if int(block) != event.block || int(offset) != event.offset {
 				t.Errorf("Case %d/%d: Wrong event index: want: %d,%d found: %d,%d", i, j, event.block, event.offset, block, offset)

@@ -81,10 +81,15 @@ func (w *spaceWriter) writeIndex(out io.Writer) error {
 	st := sst.NewWriter(buf)
 
 	for _, name := range sortIndexes(w.indexes) {
-		buf := newWriteBuffer([]byte{})
+		buf := new(bytes.Buffer)
 
-		buf.PushUvarint(w.indexes[name].offset)
-		buf.PushUvarint(w.indexes[name].length)
+		b := make([]byte, 8)
+		n := binary.PutUvarint(b, uint64(w.indexes[name].offset))
+		buf.Write(b[:n])
+
+		b = make([]byte, 8)
+		n = binary.PutUvarint(b, uint64(w.indexes[name].length))
+		buf.Write(b[:n])
 
 		if err := st.Set([]byte(name), buf.Bytes()); err != nil {
 			return err

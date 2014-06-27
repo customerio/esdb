@@ -1,5 +1,12 @@
 package esdb
 
+import (
+	"bytes"
+	"encoding/binary"
+
+	"github.com/customerio/esdb/blocks"
+)
+
 type events []*Event
 
 func (e events) Len() int           { return len(e) }
@@ -17,18 +24,21 @@ func newEvent(data []byte, timestamp int) *Event {
 	return &Event{data, timestamp, 0, 0}
 }
 
-func pullEvent(buf *buffer) (e *Event) {
-	size := buf.PullUvarint()
-	data := buf.Pull(size)
+func pullEvent(r *blocks.Reader) (e *Event) {
+	size, _ := binary.ReadUvarint(r)
 
-	if len(data) > 0 {
-		e = &Event{Data: data}
+	data := make([]byte, size)
+	n, _ := r.Read(data)
+
+	if len(data[:n]) > 0 {
+		e = &Event{Data: data[:n]}
 	}
 
 	return
 }
 
-func (e *Event) push(buf *writeBuffer) {
-	buf.PushUvarint(len(e.Data))
-	buf.Push(e.Data)
+func (e *Event) push(buf *bytes.Buffer) {
+	b := make([]byte, 8)
+	n := binary.PutUvarint(b, uint64(len(e.Data)))
+	buf.Write(append(b[:n], e.Data...))
 }

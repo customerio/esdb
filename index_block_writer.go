@@ -1,6 +1,8 @@
 package esdb
 
 import (
+	"bytes"
+	"encoding/binary"
 	"io"
 	"sort"
 
@@ -8,17 +10,15 @@ import (
 )
 
 func writeIndexBlocks(i *index, out io.Writer) int {
-	sort.Stable(i.evs)
+	sort.Stable(sort.Reverse(i.evs))
 
 	writer := blocks.NewWriter(out, 4096)
 
-	writer.Write([]byte{0})
-
 	for _, event := range i.evs {
-		buf := newWriteBuffer([]byte{})
+		buf := new(bytes.Buffer)
 
-		buf.PushUint64(event.block)
-		buf.PushUint16(event.offset)
+		binary.Write(buf, binary.LittleEndian, uint64(event.block))
+		binary.Write(buf, binary.LittleEndian, uint16(event.offset))
 
 		writer.Write(buf.Bytes())
 	}

@@ -83,9 +83,9 @@ func TestWriteEventBlocksMedium(t *testing.T) {
 		block  int
 		offset int
 	}{
-		{e1, 8192, 218},
+		{e1, 8196, 214},
 		{e2, 0, 3402},
-		{e3, 4096, 2110},
+		{e3, 4098, 2108},
 		{e4, 0, 0},
 	}
 
@@ -97,17 +97,17 @@ func TestWriteEventBlocksMedium(t *testing.T) {
 		}
 	}
 
-	buf := newBuffer(blocks.NewByteReader(w.Bytes(), 4096), 0, uint64(len(w.Bytes())), len(w.Bytes()))
+	r := blocks.NewByteReader(w.Bytes(), 4096)
 
 	for i, dataLen := range []int{3400, 2800, 2200, 2600} {
-		e := pullEvent(buf)
+		e := pullEvent(r)
 
 		if len(e.Data) != dataLen {
 			t.Errorf("Case %d: Wrong read data. wanted: %d bytes found: %d bytes", i, dataLen, len(e.Data))
 		}
 	}
 
-	if e := pullEvent(buf); e != nil {
+	if e := pullEvent(r); e != nil {
 		t.Errorf("Case %d: Found unexpected written event %v", e.Data)
 	}
 }
@@ -131,9 +131,9 @@ func TestWriteEventBlocksLarge(t *testing.T) {
 		block  int
 		offset int
 	}{
-		{e1, 57344, 2693},
-		{e2, 16384, 3627},
-		{e3, 36864, 3160},
+		{e1, 57372, 2665},
+		{e2, 16392, 3619},
+		{e3, 36882, 3142},
 		{e4, 0, 0},
 	}
 
@@ -145,17 +145,17 @@ func TestWriteEventBlocksLarge(t *testing.T) {
 		}
 	}
 
-	buf := newBuffer(blocks.NewByteReader(w.Bytes(), 4096), 0, uint64(len(w.Bytes())), len(w.Bytes()))
+	r := blocks.NewByteReader(w.Bytes(), 4096)
 
 	for i, dataLen := range []int{20000, 20000, 20000, 20000} {
-		e := pullEvent(buf)
+		e := pullEvent(r)
 
 		if len(e.Data) != dataLen {
 			t.Errorf("Case %d: Wrong read data. wanted: %d bytes found: %d bytes", i, dataLen, len(e.Data))
 		}
 	}
 
-	if e := pullEvent(buf); e != nil {
+	if e := pullEvent(r); e != nil {
 		t.Errorf("Case %d: Found unexpected written event %v", e.Data)
 	}
 }

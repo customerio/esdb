@@ -87,6 +87,36 @@ func TestReadBlock(t *testing.T) {
 	}
 }
 
+func TestReadByte(t *testing.T) {
+	buffer := new(bytes.Buffer)
+	w := NewWriter(buffer, 5)
+
+	data := []byte("abcdefghijklmnopqrstuvwxyz")
+
+	w.Write(data)
+	w.Flush()
+
+	r := NewReader(bytes.NewReader(buffer.Bytes()), 5)
+
+	for i, expected := range data {
+		found, err := r.ReadByte()
+
+		if found != expected {
+			t.Errorf("Wrong byte for Case %d: want: %s got: %s", i, expected, found)
+		}
+
+		if err != nil {
+			t.Errorf("Wrong error for Case %d: want: <nil> got: %v", i, err)
+		}
+	}
+
+	b, err := r.ReadByte()
+
+	if b != 0 || err == nil {
+		t.Errorf("Wrong return from empty ReadByte: want: <nil>,EOF got: %x%v", b, err)
+	}
+}
+
 func TestSeek(t *testing.T) {
 	buffer := new(bytes.Buffer)
 	w := NewWriter(buffer, 5)

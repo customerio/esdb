@@ -25,15 +25,25 @@ func NewReader(r io.ReadSeeker, blockSize int) *Reader {
 }
 
 func (r *Reader) Read(p []byte) (n int, err error) {
-	e := r.fetch(len(p))
-
+	r.fetch(len(p))
 	n, err = r.buffer.Read(p)
+	return
+}
 
-	if e != nil && err == nil {
-		err = e
-	}
+func (r *Reader) ReadByte() (c byte, err error) {
+	r.fetch(1)
+
+	b := make([]byte, 1)
+
+	_, err = r.buffer.Read(b)
+	c = b[0]
 
 	return
+}
+
+func (r *Reader) Peek(n int) []byte {
+	r.fetch(n)
+	return r.buffer.Bytes()[:n]
 }
 
 func (r *Reader) ReadBlock(offset int64) ([]byte, error) {
@@ -79,6 +89,7 @@ func (r *Reader) Seek(offset int64, whence int) (int64, error) {
 	}
 
 	r.buffer = new(bytes.Buffer)
+	r.scratch = new(bytes.Buffer)
 	return r.reader.Seek(offset, 0)
 }
 
