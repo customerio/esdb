@@ -51,42 +51,6 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func TestReadBlock(t *testing.T) {
-	buffer := new(bytes.Buffer)
-	w := NewWriter(buffer, 5)
-
-	w.Write([]byte("abcdefghijklmnopqrstuvwxyz"))
-	w.Flush()
-
-	r := NewReader(bytes.NewReader(buffer.Bytes()), 5)
-
-	var tests = []struct {
-		position int64
-		result   string
-		err      error
-	}{
-		{8, "fghij", nil},
-		{0, "abcde", nil},
-		{16, "klmno", nil},
-		{8, "fghij", nil},
-		{24, "pqrst", nil},
-		{0, "abcde", nil},
-		{50, "", io.EOF},
-	}
-
-	for i, test := range tests {
-		bytes, err := r.ReadBlock(test.position)
-
-		if !reflect.DeepEqual(bytes, []byte(test.result)) {
-			t.Errorf("Wrong bytes for Case %d:\n want: %s\n  got: %s", i, test.result, bytes)
-		}
-
-		if err != test.err {
-			t.Errorf("Wrong error for Case %d:\n want: %v\n  got: %v", i, test.err, err)
-		}
-	}
-}
-
 func TestReadByte(t *testing.T) {
 	buffer := new(bytes.Buffer)
 	w := NewWriter(buffer, 5)
