@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 
+	"github.com/customerio/esdb/blocks"
 	"github.com/customerio/esdb/sst"
 )
 
@@ -23,7 +24,7 @@ func openSpace(reader io.ReadSeeker, id []byte, offset, length uint64) *Space {
 		return &Space{
 			Id:     id,
 			index:  st,
-			buf:    newBuffer(reader, offset, offset+length, 4096),
+			buf:    newBuffer(blocks.NewReader(reader, 4096), offset, offset+length, 4096),
 			offset: offset,
 		}
 	}
@@ -47,36 +48,42 @@ func (s *Space) Scan(grouping string, scanner Scanner) {
 
 func (s *Space) ScanIndex(name, value string, scanner Scanner) {
 	if buf := s.findIndex(name, value); buf != nil {
+		buf.Pull(1) // Gets rid of nil marker
+
 		block := buf.PullUint64()
 		offset := uint64(buf.PullUint16())
+		s.buf.Move(s.offset+block+offset, 0)
 
-		for block+offset > 0 {
-			s.buf.Move(s.offset+block+offset, 0)
-
-			if !scanner(pullEvent(s.buf)) {
+		for event := pullEvent(s.buf); block+offset > 0 && event != nil; {
+			if !scanner(event) {
 				return
 			}
 
 			block = buf.PullUint64()
 			offset = uint64(buf.PullUint16())
+			s.buf.Move(s.offset+block+offset, 0)
+			event = pullEvent(s.buf)
 		}
 	}
 }
 
 func (s *Space) RevScanIndex(name, value string, scanner Scanner) {
 	if buf := s.findIndex(name, value); buf != nil {
+		buf.Pull(1) // Gets rid of nil marker
+
 		offset := uint64(buf.PopUint16())
 		block := buf.PopUint64()
+		s.buf.Move(s.offset+block+offset, 0)
 
-		for block+offset > 0 {
-			s.buf.Move(s.offset+block+offset, 0)
-
-			if !scanner(pullEvent(s.buf)) {
+		for event := pullEvent(s.buf); block+offset > 0 && event != nil; {
+			if !scanner(event) {
 				return
 			}
 
 			offset = uint64(buf.PopUint16())
 			block = buf.PopUint64()
+			s.buf.Move(s.offset+block+offset, 0)
+			event = pullEvent(s.buf)
 		}
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"reflect"
 	"testing"
+
+	"github.com/customerio/esdb/blocks"
 )
 
 func TestWriteSpaceImmutability(t *testing.T) {
@@ -42,8 +44,8 @@ func TestWriteSpaceGrouping(t *testing.T) {
 		length int
 		evs    events
 	}{
-		{"g1", 1, 9, events{e4, e1}},
-		{"g2", 10, 5, events{e2, e3}},
+		{"g1", 1, 11, events{e4, e1}},
+		{"g2", 12, 7, events{e2, e3}},
 	}
 
 	for i, test := range tests {
@@ -57,7 +59,7 @@ func TestWriteSpaceGrouping(t *testing.T) {
 			t.Errorf("Case %d: Wrong grouping encoding: want: %d,%d found: %d,%d", i, test.offset, test.length, offset, length)
 		}
 
-		buf = newBuffer(bytes.NewReader(w.Bytes()), uint64(offset), uint64(offset+length), 0)
+		buf = newBuffer(blocks.NewByteReader(w.Bytes(), 4096), uint64(offset), uint64(offset+length), 0)
 
 		for j, event := range test.evs {
 			if e := pullEvent(buf); !reflect.DeepEqual(e.Data, event.Data) {
@@ -95,9 +97,9 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		evs     events
 		indexed events
 	}{
-		{"g1", 1, 13, events{e4, e2, e3, e1}, nil},
-		{"ia:1", 14, 20, nil, events{e1, e4}},
-		{"ia:2", 34, 20, nil, events{e3, e2}},
+		{"g1", 1, 15, events{e4, e2, e3, e1}, nil},
+		{"ia:1", 16, 24, nil, events{e1, e4}},
+		{"ia:2", 40, 24, nil, events{e3, e2}},
 	}
 
 	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, uint64(w.Len()))
@@ -110,11 +112,11 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		offset := buf.PullUvarint()
 		length := buf.PullUvarint()
 
-		buf = newBuffer(bytes.NewReader(w.Bytes()), uint64(offset), uint64(offset+length), 0)
-
 		if offset != test.offset || length != test.length {
 			t.Errorf("Case %d: Wrong grouping encoding: want: %d,%d found: %d,%d", i, test.offset, test.length, offset, length)
 		}
+
+		buf = newBuffer(blocks.NewByteReader(w.Bytes(), 4096), uint64(offset), uint64(offset+length), 0)
 
 		if len(test.evs) > 0 {
 			for j, event := range test.evs {
@@ -128,7 +130,10 @@ func TestWriteSpaceIndexes(t *testing.T) {
 			}
 		}
 
+		buf.Pull(1)
+
 		for j, event := range test.indexed {
+
 			block := buf.PullUint64()
 			offset := buf.PullUint16()
 

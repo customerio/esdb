@@ -3,31 +3,28 @@ package esdb
 import (
 	"io"
 	"sort"
+
+	"github.com/customerio/esdb/blocks"
 )
 
-func writeEventBlocks(i *index, out io.Writer) (blocks int) {
+func writeEventBlocks(i *index, out io.Writer) (count int) {
 	sort.Stable(sort.Reverse(i.evs))
 
-	buf := newWriteBuffer([]byte{})
-
-	var write = func(limit int) {
-		for buf.Len() > limit {
-			n, _ := out.Write(buf.Next(4096))
-			i.length += n
-			blocks += 1
-		}
-	}
+	writer := blocks.NewWriter(out, 4096)
 
 	for _, event := range i.evs {
-		event.block = i.offset + i.length
-		event.offset = buf.Len()
+		buf := newWriteBuffer([]byte{})
+
+		event.block = i.offset + writer.Written
+		event.offset = writer.Buffered()
+
 		event.push(buf)
-		write(4096)
+		writer.Write(buf.Bytes())
 	}
 
-	buf.Push([]byte{0})
+	writer.Write([]byte{0})
+	writer.Flush()
+	i.length += writer.Written
 
-	write(0)
-
-	return
+	return writer.Blocks
 }

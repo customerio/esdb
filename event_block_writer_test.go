@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"reflect"
 	"testing"
+
+	"github.com/customerio/esdb/blocks"
 )
 
 func generate(length int) []byte {
@@ -30,7 +32,7 @@ func TestWriteEventBlocksSmall(t *testing.T) {
 		t.Errorf("Wrong number of event blocks: wanted: 1, found: %v", blocks)
 	}
 
-	expected := []byte("\x03def\x01b\x01c\x03abc\x00")
+	expected := []byte("\x0d\x00\x03def\x01b\x01c\x03abc\x00")
 
 	if !reflect.DeepEqual(buf.Bytes(), expected) {
 		t.Errorf("Wrong event block bytecode:\n wanted: %x\n found:  %x", expected, buf.Bytes())
@@ -81,9 +83,9 @@ func TestWriteEventBlocksMedium(t *testing.T) {
 		block  int
 		offset int
 	}{
-		{e1, 8192, 214},
+		{e1, 8192, 218},
 		{e2, 0, 3402},
-		{e3, 4096, 2108},
+		{e3, 4096, 2110},
 		{e4, 0, 0},
 	}
 
@@ -95,7 +97,7 @@ func TestWriteEventBlocksMedium(t *testing.T) {
 		}
 	}
 
-	buf := newByteBuffer(w.Bytes())
+	buf := newBuffer(blocks.NewByteReader(w.Bytes(), 4096), 0, uint64(len(w.Bytes())), len(w.Bytes()))
 
 	for i, dataLen := range []int{3400, 2800, 2200, 2600} {
 		e := pullEvent(buf)
@@ -129,9 +131,9 @@ func TestWriteEventBlocksLarge(t *testing.T) {
 		block  int
 		offset int
 	}{
-		{e1, 57344, 2665},
-		{e2, 16384, 3619},
-		{e3, 36864, 3142},
+		{e1, 57344, 2693},
+		{e2, 16384, 3627},
+		{e3, 36864, 3160},
 		{e4, 0, 0},
 	}
 
@@ -143,7 +145,7 @@ func TestWriteEventBlocksLarge(t *testing.T) {
 		}
 	}
 
-	buf := newByteBuffer(w.Bytes())
+	buf := newBuffer(blocks.NewByteReader(w.Bytes(), 4096), 0, uint64(len(w.Bytes())), len(w.Bytes()))
 
 	for i, dataLen := range []int{20000, 20000, 20000, 20000} {
 		e := pullEvent(buf)

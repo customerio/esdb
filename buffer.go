@@ -23,7 +23,14 @@ type writeBuffer struct {
 }
 
 func newBuffer(r io.ReadSeeker, start, limit uint64, pageSize int) *buffer {
-	return &buffer{r, bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{}), start, start, limit, 0, limit, pageSize}
+	buffer := &buffer{
+		r, bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{}),
+		start, start, limit, 0, limit, pageSize,
+	}
+
+	buffer.reader.Seek(int64(start), 0)
+
+	return buffer
 }
 
 func newByteBuffer(b []byte) *buffer {
@@ -57,6 +64,7 @@ func (b *buffer) Reset() {
 	b.offset = 0
 	b.endOffset = b.limit
 	b.buf.Reset()
+	b.reader.Seek(int64(b.start), 0)
 }
 
 func (b *buffer) Move(start uint64, pageSize int) {
@@ -65,6 +73,7 @@ func (b *buffer) Move(start uint64, pageSize int) {
 	b.endOffset = b.limit
 	b.pageSize = pageSize
 	b.buf.Reset()
+	b.reader.Seek(int64(b.start), 0)
 }
 
 func (b *buffer) PullUvarint() int {
@@ -179,7 +188,7 @@ func (b *buffer) nextSpace(requested int) io.Reader {
 		start = b.limit
 	}
 
-	b.reader.Seek(int64(start), 0)
+	//b.reader.Seek(int64(start), 0)
 
 	length := uint64(requested)
 

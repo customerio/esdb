@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/customerio/esdb/blocks"
 )
 
 func TestWriteIndexBlocksSmall(t *testing.T) {
@@ -17,21 +19,20 @@ func TestWriteIndexBlocksSmall(t *testing.T) {
 
 	index := &index{evs: events{e1, e2, e3, e4}}
 
-	blocks := writeIndexBlocks(index, w)
+	writeIndexBlocks(index, w)
 
-	if !reflect.DeepEqual(blocks, []int{0}) {
-		t.Errorf("Wrong number of event blocks: wanted: [0], found: %#v", blocks)
-	}
-
-	if index.length != 40 {
-		t.Errorf("Wrong written length: wanted: 40, found: %d", index.length)
+	if index.length != 44 {
+		t.Errorf("Wrong written length: wanted: 44, found: %d", index.length)
 	}
 
 	expected := []byte(
-		"\x00\x00\x00\x00\x00\x00\x00\x00" + "\x00\x08" +
+		"\x2a\x00" +
+			"\x00" +
+			"\x00\x00\x00\x00\x00\x00\x00\x00" + "\x00\x08" +
 			"\x00\x08\x00\x00\x00\x00\x00\x00" + "\x00\x02" +
 			"\x00\x02\x00\x00\x00\x00\x00\x00" + "\x80\x00" +
-			"\xF8\x00\x00\x00\x00\x00\x00\x00" + "\x00\x04",
+			"\xF8\x00\x00\x00\x00\x00\x00\x00" + "\x00\x04" +
+			"\x00",
 	)
 
 	if !reflect.DeepEqual(w.Bytes(), expected) {
@@ -44,7 +45,9 @@ func TestWriteIndexBlocksSmall(t *testing.T) {
 		t.Errorf("Wrongly sorted events: wanted: %v found: %v", want, index.evs)
 	}
 
-	buf := newByteBuffer(w.Bytes())
+	buf := newBuffer(blocks.NewByteReader(w.Bytes(), 4096), 0, uint64(len(w.Bytes())), len(w.Bytes()))
+
+	buf.Pull(1)
 
 	for i, event := range index.evs {
 		block := int(buf.PullUint64())
@@ -65,17 +68,15 @@ func TestWriteIndexBlocksMedium(t *testing.T) {
 		index.evs[i] = &Event{Timestamp: i, block: int(rand.Int63()), offset: rand.Intn(4096)}
 	}
 
-	blocks := writeIndexBlocks(index, w)
+	writeIndexBlocks(index, w)
 
-	if !reflect.DeepEqual(blocks, []int{0, 4096}) {
-		t.Errorf("Wrong number of event blocks: wanted: [0, 4096], found: %#v", blocks)
+	if index.length != 5006 {
+		t.Errorf("Wrong written length: wanted: 5006, found: %d", index.length)
 	}
 
-	if index.length != 5000 {
-		t.Errorf("Wrong written length: wanted: 5000, found: %d", index.length)
-	}
+	buf := newBuffer(blocks.NewByteReader(w.Bytes(), 4096), 0, uint64(len(w.Bytes())), len(w.Bytes()))
 
-	buf := newByteBuffer(w.Bytes())
+	buf.Pull(1)
 
 	for i, event := range index.evs {
 		block := int(buf.PullUint64())
@@ -96,17 +97,15 @@ func TestWriteIndexBlocksLarge(t *testing.T) {
 		index.evs[i] = &Event{Timestamp: i, block: int(rand.Int63()), offset: rand.Intn(4096)}
 	}
 
-	blocks := writeIndexBlocks(index, w)
+	writeIndexBlocks(index, w)
 
-	if !reflect.DeepEqual(blocks, []int{0, 4096, 8192, 12288, 16384, 20480, 24576, 28672, 32768, 36864, 40960, 45056, 49152}) {
-		t.Errorf("Wrong number of event blocks: wanted: 12*4096?, found: %#v", blocks)
+	if index.length != 50028 {
+		t.Errorf("Wrong written length: wanted: 50028, found: %d", index.length)
 	}
 
-	if index.length != 50000 {
-		t.Errorf("Wrong written length: wanted: 50000, found: %d", index.length)
-	}
+	buf := newBuffer(blocks.NewByteReader(w.Bytes(), 4096), 0, uint64(len(w.Bytes())), len(w.Bytes()))
 
-	buf := newByteBuffer(w.Bytes())
+	buf.Pull(1)
 
 	for i, event := range index.evs {
 		block := int(buf.PullUint64())
