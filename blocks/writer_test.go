@@ -10,18 +10,18 @@ func TestWriterSmallBlockSize(t *testing.T) {
 	buffer := new(bytes.Buffer)
 	w := NewWriter(buffer, 32)
 
-	for i, expected := range []int{0, 0, 0, 32} {
+	for i, expected := range []int{0, 0, 0, 34} {
 		if n, err := w.Write([]byte("helloworld")); n != expected || err != nil {
 			t.Errorf("Wrong response for write %d: want: %d,<nil> got: %d,%v", i, expected, n, err)
 		}
 	}
 
-	if n, err := w.Flush(); n != 12 || err != nil {
-		t.Errorf("Wrong response for flush: want: 12,<nil> got: %d,%v", n, err)
+	if n, err := w.Flush(); n != 10 || err != nil {
+		t.Errorf("Wrong response for flush: want: 10,<nil> got: %d,%v", n, err)
 	}
 
 	expected := []byte(
-		"\x1e\x00helloworldhelloworldhelloworld\x0a\x00helloworld",
+		"\x20\x00helloworldhelloworldhelloworldhe\x08\x00lloworld",
 	)
 
 	if !reflect.DeepEqual(buffer.Bytes(), expected) {
@@ -52,7 +52,7 @@ func TestWriterTinyBlockSize(t *testing.T) {
 
 func TestWriterLargeBlockSize(t *testing.T) {
 	buffer := new(bytes.Buffer)
-	w := NewWriter(buffer, 131072)
+	w := NewWriter(buffer, 131068)
 
 	for i := 0; i < 13108; i++ {
 		if _, err := w.Write([]byte("helloworld")); err != nil {
@@ -86,11 +86,11 @@ func TestWriterState(t *testing.T) {
 	}{
 		{"abc", 3, 0, 0},
 		{"def", 6, 0, 0},
-		{"ghi", 5, 6, 1},
-		{"jkl", 4, 12, 2},
-		{"lmn", 3, 18, 3},
-		{"opq", 6, 18, 3},
-		{"", 0, 28, 5},
+		{"ghi", 3, 8, 1},
+		{"jkl", 6, 8, 1},
+		{"lmn", 3, 16, 2},
+		{"opq", 6, 16, 2},
+		{"", 0, 24, 3},
 	}
 
 	buffer := new(bytes.Buffer)

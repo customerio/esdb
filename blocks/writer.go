@@ -39,7 +39,8 @@ func (w *Writer) flush(size int) (n int, err error) {
 	var i int
 
 	for w.buffer.Len() > size {
-		block := w.buffer.Next(maxBodyLen(w.blockSize))
+		block := w.buffer.Next(w.blockSize)
+
 		head := header(w.blockSize, block)
 
 		i, err = w.writer.Write(head)
@@ -64,20 +65,6 @@ func (w *Writer) flush(size int) (n int, err error) {
 	return
 }
 
-func blockLen(blockSize int) int {
-	return maxBodyLen(blockSize) + headerLen(blockSize)
-}
-
-func maxBodyLen(blockSize int) int {
-	n := headerLen(blockSize)
-
-	if blockSize > n {
-		return blockSize - n
-	} else {
-		return blockSize
-	}
-}
-
 func headerLen(blockSize int) int {
 	return len(header(blockSize, []byte{}))
 }
@@ -93,23 +80,23 @@ func header(blockSize int, block []byte) []byte {
 
 func fixedInt(blockSize, size int) (ret interface{}) {
 	if blockSize <= 65536 {
-		ret = int16(size)
+		ret = uint16(size)
 	} else if blockSize <= 4294967296 {
-		ret = int32(size)
+		ret = uint32(size)
 	} else {
-		ret = int64(size)
+		ret = uint64(size)
 	}
 
 	return
 }
 
-func parseInt(size interface{}) (ret int) {
-	if n, ok := size.(int16); ok {
-		return int(n)
-	} else if n, ok := size.(int32); ok {
-		return int(n)
-	} else if n, ok := size.(int64); ok {
-		return int(n)
+func parseInt(size interface{}) (ret uint) {
+	if n, ok := size.(uint16); ok {
+		return uint(n)
+	} else if n, ok := size.(uint32); ok {
+		return uint(n)
+	} else if n, ok := size.(uint64); ok {
+		return uint(n)
 	}
 
 	return 0

@@ -64,12 +64,12 @@ func TestSeek(t *testing.T) {
 		position int
 		result   string
 	}{
-		{5, "def"},
-		{0, "abc"},
-		{10, "ghi"},
-		{5, "def"},
-		{20, "mno"},
-		{0, "abc"},
+		{7, "fghij"},
+		{0, "abcde"},
+		{14, "klmno"},
+		{7, "fghij"},
+		{21, "pqrst"},
+		{0, "abcde"},
 		{50, ""},
 	}
 
