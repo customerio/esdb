@@ -32,7 +32,7 @@ func TestWriteEventBlocksSmall(t *testing.T) {
 		t.Errorf("Wrong number of event blocks: wanted: 1, found: %v", blocks)
 	}
 
-	expected := []byte("\x0d\x00\x03def\x01b\x01c\x03abc\x00")
+	expected := []byte("\x0d\x00\x00\x03def\x01b\x01c\x03abc\x00")
 
 	if !reflect.DeepEqual(buf.Bytes(), expected) {
 		t.Errorf("Wrong event block bytecode:\n wanted: %x\n found:  %x", expected, buf.Bytes())
@@ -83,9 +83,9 @@ func TestWriteEventBlocksMedium(t *testing.T) {
 		block  int
 		offset int
 	}{
-		{e1, 8196, 214},
+		{e1, 411, 214},
 		{e2, 0, 3402},
-		{e3, 4098, 2108},
+		{e3, 206, 2108},
 		{e4, 0, 0},
 	}
 
@@ -131,9 +131,9 @@ func TestWriteEventBlocksLarge(t *testing.T) {
 		block  int
 		offset int
 	}{
-		{e1, 57372, 2665},
-		{e2, 16392, 3619},
-		{e3, 36882, 3142},
+		{e1, 2802, 2665},
+		{e2, 799, 3619},
+		{e3, 1801, 3142},
 		{e4, 0, 0},
 	}
 

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+
+	"github.com/dgryski/go-csnappy"
 )
 
 type Writer struct {
@@ -36,12 +38,18 @@ func (w *Writer) Flush() (n int, err error) {
 }
 
 func (w *Writer) flush(size int) (n int, err error) {
+	var encoding = NO_COMPRESSION
 	var i int
 
 	for w.buffer.Len() > size {
 		block := w.buffer.Next(w.blockSize)
 
-		head := header(w.blockSize, block)
+		if encoded, err := csnappy.Encode(nil, block); err == nil && len(encoded) <= len(block) {
+			encoding = SNAPPY_COMPRESSION
+			block = encoded
+		}
+
+		head := header(w.blockSize, encoding, block)
 
 		i, err = w.writer.Write(head)
 		w.Written += i
@@ -66,14 +74,15 @@ func (w *Writer) flush(size int) (n int, err error) {
 }
 
 func headerLen(blockSize int) int {
-	return len(header(blockSize, []byte{}))
+	return len(header(blockSize, 0, []byte{}))
 }
 
-func header(blockSize int, block []byte) []byte {
-	size := fixedInt(blockSize, len(block))
-
+func header(blockSize int, encoding int, block []byte) []byte {
 	buf := new(bytes.Buffer)
+
+	size := fixedInt(blockSize, len(block))
 	binary.Write(buf, binary.LittleEndian, size)
+	buf.Write([]byte{byte(encoding)})
 
 	return buf.Bytes()
 }

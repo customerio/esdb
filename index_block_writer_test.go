@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/customerio/esdb/blocks"
+	"github.com/dgryski/go-csnappy"
 )
 
 func TestWriteIndexBlocksSmall(t *testing.T) {
@@ -22,18 +23,18 @@ func TestWriteIndexBlocksSmall(t *testing.T) {
 
 	writeIndexBlocks(index, w)
 
-	if index.length != 43 {
-		t.Errorf("Wrong written length: wanted: 43, found: %d", index.length)
+	if index.length != 36 {
+		t.Errorf("Wrong written length: wanted: 36, found: %d", index.length)
 	}
 
-	expected := []byte(
-		"\x29\x00" +
-			"\xF8\x00\x00\x00\x00\x00\x00\x00" + "\x00\x04" +
-			"\x00\x02\x00\x00\x00\x00\x00\x00" + "\x80\x00" +
-			"\x00\x08\x00\x00\x00\x00\x00\x00" + "\x00\x02" +
-			"\x00\x00\x00\x00\x00\x00\x00\x00" + "\x00\x08" +
-			"\x00",
-	)
+	compressed, _ := csnappy.Encode(nil, []byte(
+		"\xF8\x00\x00\x00\x00\x00\x00\x00"+"\x00\x04"+
+			"\x00\x02\x00\x00\x00\x00\x00\x00"+"\x80\x00"+
+			"\x00\x08\x00\x00\x00\x00\x00\x00"+"\x00\x02"+
+			"\x00\x00\x00\x00\x00\x00\x00\x00"+"\x00\x08"+
+			"\x00"))
+
+	expected := append([]byte("\x21\x00\x01"), compressed...)
 
 	if !reflect.DeepEqual(w.Bytes(), expected) {
 		t.Errorf("Wrong event block bytecode:\n wanted: %x\n found:  %x", expected, w.Bytes())
@@ -70,8 +71,8 @@ func TestWriteIndexBlocksMedium(t *testing.T) {
 
 	writeIndexBlocks(index, w)
 
-	if index.length != 5005 {
-		t.Errorf("Wrong written length: wanted: 5006, found: %d", index.length)
+	if index.length != 5007 {
+		t.Errorf("Wrong written length: wanted: 5007, found: %d", index.length)
 	}
 
 	reader := blocks.NewByteReader(w.Bytes(), 4096)
@@ -99,8 +100,8 @@ func TestWriteIndexBlocksLarge(t *testing.T) {
 
 	writeIndexBlocks(index, w)
 
-	if index.length != 50027 {
-		t.Errorf("Wrong written length: wanted: 50027, found: %d", index.length)
+	if index.length != 50040 {
+		t.Errorf("Wrong written length: wanted: 50040, found: %d", index.length)
 	}
 
 	reader := blocks.NewByteReader(w.Bytes(), 4096)

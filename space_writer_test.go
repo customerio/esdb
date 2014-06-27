@@ -46,8 +46,8 @@ func TestWriteSpaceGrouping(t *testing.T) {
 		length int
 		evs    events
 	}{
-		{"g1", 1, 11, events{e4, e1}},
-		{"g2", 12, 7, events{e2, e3}},
+		{"g1", 1, 12, events{e4, e1}},
+		{"g2", 13, 8, events{e2, e3}},
 	}
 
 	for i, test := range tests {
@@ -100,9 +100,9 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		evs     events
 		indexed events
 	}{
-		{"g1", 1, 15, events{e4, e2, e3, e1}, nil},
-		{"ia:1", 16, 23, nil, events{e4, e1}},
-		{"ia:2", 39, 23, nil, events{e2, e3}},
+		{"g1", 1, 16, events{e4, e2, e3, e1}, nil},
+		{"ia:1", 17, 21, nil, events{e4, e1}},
+		{"ia:2", 38, 23, nil, events{e2, e3}},
 	}
 
 	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, uint64(w.Len()))

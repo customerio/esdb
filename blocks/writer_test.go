@@ -4,24 +4,28 @@ import (
 	"bytes"
 	"reflect"
 	"testing"
+
+	"github.com/dgryski/go-csnappy"
 )
 
 func TestWriterSmallBlockSize(t *testing.T) {
 	buffer := new(bytes.Buffer)
 	w := NewWriter(buffer, 32)
 
-	for i, expected := range []int{0, 0, 0, 34} {
+	for i, expected := range []int{0, 0, 0, 18} {
 		if n, err := w.Write([]byte("helloworld")); n != expected || err != nil {
 			t.Errorf("Wrong response for write %d: want: %d,<nil> got: %d,%v", i, expected, n, err)
 		}
 	}
 
-	if n, err := w.Flush(); n != 10 || err != nil {
-		t.Errorf("Wrong response for flush: want: 10,<nil> got: %d,%v", n, err)
+	if n, err := w.Flush(); n != 11 || err != nil {
+		t.Errorf("Wrong response for flush: want: 11,<nil> got: %d,%v", n, err)
 	}
 
+	c1, _ := csnappy.Encode(nil, []byte("helloworldhelloworldhelloworldhe"))
+
 	expected := []byte(
-		"\x20\x00helloworldhelloworldhelloworldhe\x08\x00lloworld",
+		"\x0f\x00\x01" + string(c1) + "\x08\x00\x00lloworld",
 	)
 
 	if !reflect.DeepEqual(buffer.Bytes(), expected) {
@@ -33,16 +37,16 @@ func TestWriterTinyBlockSize(t *testing.T) {
 	buffer := new(bytes.Buffer)
 	w := NewWriter(buffer, 2)
 
-	if n, err := w.Write([]byte("helloworld")); n != 16 || err != nil {
-		t.Errorf("Wrong response for write: want: 16,<nil> got: %d,%v", n, err)
+	if n, err := w.Write([]byte("helloworld")); n != 20 || err != nil {
+		t.Errorf("Wrong response for write: want: 20,<nil> got: %d,%v", n, err)
 	}
 
-	if n, err := w.Flush(); n != 4 || err != nil {
-		t.Errorf("Wrong response for flush: want: 4,<nil> got: %d,%v", n, err)
+	if n, err := w.Flush(); n != 5 || err != nil {
+		t.Errorf("Wrong response for flush: want: 5,<nil> got: %d,%v", n, err)
 	}
 
 	expected := []byte(
-		"\x02\x00he\x02\x00ll\x02\x00ow\x02\x00or\x02\x00ld",
+		"\x02\x00\x00he\x02\x00\x00ll\x02\x00\x00ow\x02\x00\x00or\x02\x00\x00ld",
 	)
 
 	if !reflect.DeepEqual(buffer.Bytes(), expected) {
@@ -64,15 +68,13 @@ func TestWriterLargeBlockSize(t *testing.T) {
 		t.Errorf("Wrong response for flush: want: <nil> got: %v", err)
 	}
 
-	if buffer.Len() != 131088 {
-		t.Errorf("Wrong written length: want: 131088 got: %d", buffer.Len())
+	if buffer.Len() != 6191 {
+		t.Errorf("Wrong written length: want: 6191 got: %d", buffer.Len())
 	}
 
-	expected := []byte(
-		"\xfc\xff\x01\x00helloworldhellow",
-	)
+	expected := []byte("\x19\x18\x00\x00\x01")
 
-	if !reflect.DeepEqual(buffer.Bytes()[:20], expected) {
+	if !reflect.DeepEqual(buffer.Bytes()[:5], expected) {
 		t.Errorf("Wrong block formatting:\n want: %x\n  got: %x", expected, buffer.Bytes()[:20])
 	}
 }
@@ -86,11 +88,11 @@ func TestWriterState(t *testing.T) {
 	}{
 		{"abc", 3, 0, 0},
 		{"def", 6, 0, 0},
-		{"ghi", 3, 8, 1},
-		{"jkl", 6, 8, 1},
-		{"lmn", 3, 16, 2},
-		{"opq", 6, 16, 2},
-		{"", 0, 24, 3},
+		{"ghi", 3, 9, 1},
+		{"jkl", 6, 9, 1},
+		{"lmn", 3, 18, 2},
+		{"opq", 6, 18, 2},
+		{"", 0, 27, 3},
 	}
 
 	buffer := new(bytes.Buffer)

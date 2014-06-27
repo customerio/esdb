@@ -65,11 +65,11 @@ func TestReadBlock(t *testing.T) {
 		result   string
 		err      error
 	}{
-		{7, "fghij", nil},
+		{8, "fghij", nil},
 		{0, "abcde", nil},
-		{14, "klmno", nil},
-		{7, "fghij", nil},
-		{21, "pqrst", nil},
+		{16, "klmno", nil},
+		{8, "fghij", nil},
+		{24, "pqrst", nil},
 		{0, "abcde", nil},
 		{50, "", io.EOF},
 	}
@@ -130,11 +130,11 @@ func TestSeek(t *testing.T) {
 		position int
 		result   string
 	}{
-		{7, "fghij"},
+		{8, "fghij"},
 		{0, "abcde"},
-		{14, "klmno"},
-		{7, "fghij"},
-		{21, "pqrst"},
+		{16, "klmno"},
+		{8, "fghij"},
+		{24, "pqrst"},
 		{0, "abcde"},
 		{50, ""},
 	}
