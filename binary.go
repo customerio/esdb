@@ -17,13 +17,13 @@ func readUvarint(r io.ByteReader) int64 {
 }
 
 func readInt16(r io.Reader) int64 {
-	var i int16
+	var i uint16
 	binary.Read(r, binary.LittleEndian, &i)
 	return int64(i)
 }
 
 func readInt32(r io.Reader) int64 {
-	var i int32
+	var i uint32
 	binary.Read(r, binary.LittleEndian, &i)
 	return int64(i)
 }
@@ -41,11 +41,11 @@ func writeUvarint(w io.Writer, num int) {
 }
 
 func writeInt16(w io.Writer, num int) {
-	binary.Write(w, binary.LittleEndian, int16(num))
+	binary.Write(w, binary.LittleEndian, uint16(num))
 }
 
 func writeInt32(w io.Writer, num int) {
-	binary.Write(w, binary.LittleEndian, int32(num))
+	binary.Write(w, binary.LittleEndian, uint32(num))
 }
 
 func writeInt64(w io.Writer, num int) {
