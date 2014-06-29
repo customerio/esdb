@@ -1,7 +1,7 @@
 package esdb
 
 import (
-	"bytes"
+	"io"
 
 	"github.com/customerio/esdb/blocks"
 )
@@ -23,9 +23,9 @@ func newEvent(data []byte, timestamp int) *Event {
 	return &Event{data, timestamp, 0, 0}
 }
 
-func (e *Event) push(buf *bytes.Buffer) {
-	writeUvarint(buf, len(e.Data))
-	buf.Write(e.Data)
+func (e *Event) push(out io.Writer) {
+	writeUvarint(out, len(e.Data))
+	out.Write(e.Data)
 }
 
 func pullEvent(r *blocks.Reader) (e *Event) {

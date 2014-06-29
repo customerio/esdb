@@ -20,6 +20,8 @@ type Space struct {
 	index  *sst.Reader
 }
 
+// Opens a space for reading given a reader, and an offset/length of
+// the spaces position within the file.
 func openSpace(reader io.ReadSeeker, id []byte, offset, length int64) *Space {
 	if st, err := findSpaceIndex(reader, offset, length); err == nil {
 
@@ -38,62 +40,78 @@ func openSpace(reader io.ReadSeeker, id []byte, offset, length int64) *Space {
 
 func (s *Space) Scan(grouping string, scanner Scanner) {
 	if offset := s.findGroupingOffset(grouping); offset > 0 {
+		// Move to the beginning of the grouping section in the file.
 		s.blocks.Seek(s.offset+offset, 0)
 
-		for event := pullEvent(s.blocks); event != nil; {
-			if !scanner(event) {
+		// Event groupings are sequentially stored. So, pull
+		// events out of the muck until we don't find any more.
+		for {
+			event := pullEvent(s.blocks)
+
+			if event == nil || !scanner(event) {
 				return
 			}
-
-			event = pullEvent(s.blocks)
 		}
 	}
 }
 
 func (s *Space) ScanIndex(name, value string, scanner Scanner) {
 	if reader := s.findIndex(name, value); reader != nil {
-		if next := reader.Peek(1); len(next) == 0 || next[0] == 0 {
-			return
-		}
-
-		block := readInt64(reader)
-		offset := readInt16(reader)
-
-		s.blocks.Seek(s.offset+block, 0)
-		readBytes(s.blocks, offset)
-
-		for event := pullEvent(s.blocks); block > 0 && event != nil; {
-			if !scanner(event) {
-				return
-			}
-
+		for {
+			// If the next byte is 0, then that's an empty event offset,
+			// marking the end of the index. Nothing more to see here.
 			if next := reader.Peek(1); len(next) == 0 || next[0] == 0 {
 				return
 			}
 
-			block = readInt64(reader)
-			offset = readInt16(reader)
+			// Each entry in the index is a 64 bit integer for the
+			// event's block offset in the file, and a 16 bit integer
+			// for the event's offset within the block (as each block
+			// is 4096 bytes long)
+			block := readInt64(reader)
+			offset := readInt16(reader)
 
+			// Move to the event's block
 			s.blocks.Seek(s.offset+block, 0)
+
+			// Read all data prior to the current event's offset.
 			readBytes(s.blocks, offset)
 
-			event = pullEvent(s.blocks)
+			event := pullEvent(s.blocks)
+
+			if event == nil || !scanner(event) {
+				return
+			}
 		}
 	}
 }
 
 func (s *Space) findGroupingOffset(name string) int64 {
 	if val, err := s.index.Get([]byte("g" + name)); err == nil {
+		// The entry in the SSTable index for groupings
+		// is variable length integers integers for the
+		// offset and length of the index within
+		// the file. In this case, we just need the
+		// offset to find it's starting point.
 		return readUvarint(bytes.NewReader(val))
 	}
 
 	return 0
 }
 
+// Finds and returns an index by it's name and value.
 func (s *Space) findIndex(name, value string) *blocks.Reader {
 	if val, err := s.index.Get([]byte("i" + name + ":" + value)); err == nil {
+		// The entry in the SSTable index for indexes
+		// is variable length integers integers for the
+		// offset and length of the index within
+		// the file. In this case, we just need the
+		// offset to find it's starting point.
 		offset := readUvarint(bytes.NewReader(val))
 
+		// An index is block encoded, so fire up
+		// a block reader, and seek to the start
+		// of the index.
 		reader := blocks.NewReader(s.reader, 4096)
 		reader.Seek(s.offset+offset, 0)
 
@@ -106,9 +124,13 @@ func (s *Space) findIndex(name, value string) *blocks.Reader {
 func findSpaceIndex(r io.ReadSeeker, offset, length int64) (*sst.Reader, error) {
 	footerOffset := offset + length - 4
 
+	// The last 8 bytes in the file is the length
+	// of the SSTable grouping index.
 	r.Seek(footerOffset, 0)
 	indexLen := readInt32(r)
 
+	// We use the length of the SSTable to seek
+	// to the beginning of the index and read it.
 	r.Seek(footerOffset-indexLen, 0)
 	index := readBytes(r, indexLen)
 

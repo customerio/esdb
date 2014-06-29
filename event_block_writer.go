@@ -1,31 +1,34 @@
 package esdb
 
 import (
-	"bytes"
 	"io"
 	"sort"
 
 	"github.com/customerio/esdb/blocks"
 )
 
-func writeEventBlocks(i *index, out io.Writer) (count int) {
+// writes all events associated with the given
+// grouping to the file in timestamp descending order.
+// Marks the event with which block it's located in,
+// as well as the offset within the block.
+func writeEventBlocks(i *index, out io.Writer) {
 	sort.Stable(sort.Reverse(i.evs))
 
 	writer := blocks.NewWriter(out, 4096)
 
 	for _, event := range i.evs {
-		buf := new(bytes.Buffer)
-
+		// mark event with the current location in the file.
 		event.block = i.offset + writer.Written
 		event.offset = writer.Buffered()
 
-		event.push(buf)
-		writer.Write(buf.Bytes())
+		// push the encoded event onto the buffer.
+		event.push(writer)
 	}
 
+	// Mark the end of the grouping's events with an empty event.
 	writer.Write([]byte{0})
-	writer.Flush()
-	i.length += writer.Written
 
-	return writer.Blocks
+	writer.Flush()
+
+	i.length += writer.Written
 }

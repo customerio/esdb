@@ -19,7 +19,7 @@ func generate(length int) []byte {
 }
 
 func TestWriteEventBlocksSmall(t *testing.T) {
-	buf := new(bytes.Buffer)
+	w := new(bytes.Buffer)
 
 	e1 := newEvent([]byte("abc"), 1)
 	e2 := newEvent([]byte("b"), 3)
@@ -28,14 +28,12 @@ func TestWriteEventBlocksSmall(t *testing.T) {
 
 	index := &index{evs: events{e1, e2, e3, e4}}
 
-	if blocks := writeEventBlocks(index, buf); blocks != 1 {
-		t.Errorf("Wrong number of event blocks: wanted: 1, found: %v", blocks)
-	}
+	writeEventBlocks(index, w)
 
 	expected := []byte("\x0d\x00\x00\x03def\x01b\x01c\x03abc\x00")
 
-	if !reflect.DeepEqual(buf.Bytes(), expected) {
-		t.Errorf("Wrong event block bytecode:\n wanted: %x\n found:  %x", expected, buf.Bytes())
+	if !reflect.DeepEqual(w.Bytes(), expected) {
+		t.Errorf("Wrong event block bytecode:\n wanted: %x\n found:  %x", expected, w.Bytes())
 	}
 
 	want := events{e4, e2, e3, e1}
@@ -74,9 +72,7 @@ func TestWriteEventBlocksMedium(t *testing.T) {
 
 	index := &index{evs: events{e1, e2, e3, e4}}
 
-	if blocks := writeEventBlocks(index, w); blocks != 3 {
-		t.Errorf("Wrong number of event blocks: wanted: 3, found: %v", blocks)
-	}
+	writeEventBlocks(index, w)
 
 	var tests = []struct {
 		event  *Event
@@ -122,9 +118,7 @@ func TestWriteEventBlocksLarge(t *testing.T) {
 
 	index := &index{evs: events{e1, e2, e3, e4}}
 
-	if blocks := writeEventBlocks(index, w); blocks != 20 {
-		t.Errorf("Wrong number of event blocks: wanted: 20, found: %v", blocks)
-	}
+	writeEventBlocks(index, w)
 
 	var tests = []struct {
 		event  *Event
