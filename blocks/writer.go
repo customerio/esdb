@@ -25,8 +25,8 @@ import (
 //
 // blockLength's type is the smallest fixed length integer size that
 // can contain the max configured blockSize.  For instance,
-// if blockSize is 4096 bytes, we'll used an int16. If the blockSize
-// is 128 KB, we'll use a int32, etc.
+// if blockSize is 4096 bytes, we'll used an uint16. If the blockSize
+// is 128 KB, we'll use a uint32, etc.
 type Writer struct {
 	buffer    *bytes.Buffer
 	writer    io.Writer
