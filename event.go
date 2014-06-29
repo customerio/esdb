@@ -26,6 +26,7 @@ func newEvent(data []byte, timestamp int) *Event {
 func (e *Event) push(out io.Writer) {
 	writeUvarint(out, len(e.Data))
 	out.Write(e.Data)
+	e.Data = nil
 }
 
 func pullEvent(r *blocks.Reader) (e *Event) {

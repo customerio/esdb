@@ -24,10 +24,14 @@ func TestWriteSpaceGrouping(t *testing.T) {
 
 	writer := newSpace(w, []byte("a"))
 
-	e1 := newEvent([]byte("abc"), 1)
-	e2 := newEvent([]byte("b"), 3)
-	e3 := newEvent([]byte("c"), 2)
-	e4 := newEvent([]byte("def"), 4)
+	e1data := []byte("abc")
+	e2data := []byte("b")
+	e3data := []byte("c")
+	e4data := []byte("def")
+	e1 := newEvent(e1data, 1)
+	e2 := newEvent(e2data, 3)
+	e3 := newEvent(e3data, 2)
+	e4 := newEvent(e4data, 4)
 
 	writer.add(e1, "1", nil)
 	writer.add(e2, "2", nil)
@@ -42,10 +46,10 @@ func TestWriteSpaceGrouping(t *testing.T) {
 		key    string
 		offset int
 		length int
-		evs    events
+		evs    [][]byte
 	}{
-		{"g1", 1, 12, events{e4, e1}},
-		{"g2", 13, 8, events{e2, e3}},
+		{"g1", 1, 12, [][]byte{e4data, e1data}},
+		{"g2", 13, 8, [][]byte{e2data, e3data}},
 	}
 
 	for i, test := range tests {
@@ -62,9 +66,9 @@ func TestWriteSpaceGrouping(t *testing.T) {
 		reader := blocks.NewByteReader(w.Bytes(), 4096)
 		reader.Seek(int64(offset), 0)
 
-		for j, event := range test.evs {
-			if e := pullEvent(reader); !reflect.DeepEqual(e.Data, event.Data) {
-				t.Errorf("Case %d/%d: Wrong event found: want: %s found: %s", i, j, event.Data, e.Data)
+		for j, data := range test.evs {
+			if e := pullEvent(reader); !reflect.DeepEqual(e.Data, data) {
+				t.Errorf("Case %d/%d: Wrong event found: want: %s found: %s", i, j, data, e.Data)
 			}
 		}
 
@@ -79,10 +83,14 @@ func TestWriteSpaceIndexes(t *testing.T) {
 
 	writer := newSpace(w, []byte("a"))
 
-	e1 := newEvent([]byte("abc"), 1)
-	e2 := newEvent([]byte("b"), 3)
-	e3 := newEvent([]byte("c"), 2)
-	e4 := newEvent([]byte("def"), 4)
+	e1data := []byte("abc")
+	e2data := []byte("b")
+	e3data := []byte("c")
+	e4data := []byte("def")
+	e1 := newEvent(e1data, 1)
+	e2 := newEvent(e2data, 3)
+	e3 := newEvent(e3data, 2)
+	e4 := newEvent(e4data, 4)
 
 	writer.add(e1, "1", map[string]string{"a": "1"})
 	writer.add(e2, "1", map[string]string{"a": "2"})
@@ -95,10 +103,10 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		key     string
 		offset  int
 		length  int
-		evs     events
+		evs     [][]byte
 		indexed events
 	}{
-		{"g1", 1, 16, events{e4, e2, e3, e1}, nil},
+		{"g1", 1, 16, [][]byte{e4data, e2data, e3data, e1data}, nil},
 		{"ia:1", 17, 21, nil, events{e4, e1}},
 		{"ia:2", 38, 23, nil, events{e2, e3}},
 	}
@@ -121,9 +129,9 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		reader.Seek(int64(offset), 0)
 
 		if len(test.evs) > 0 {
-			for j, event := range test.evs {
-				if e := pullEvent(reader); !reflect.DeepEqual(e.Data, event.Data) {
-					t.Errorf("Case %d/%d: Wrong event found: want: %s found: %s", i, j, event.Data, e.Data)
+			for j, data := range test.evs {
+				if e := pullEvent(reader); !reflect.DeepEqual(e.Data, data) {
+					t.Errorf("Case %d/%d: Wrong event found: want: %s found: %s", i, j, data, e.Data)
 				}
 			}
 
