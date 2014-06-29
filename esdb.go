@@ -69,10 +69,5 @@ func findIndex(f *os.File) (*sst.Reader, error) {
 	f.Seek(-8, 2)
 	indexLen := readInt64(f)
 
-	// We use the length of the SSTable to seek
-	// to the beginning of the index and read it.
-	f.Seek(-8-indexLen, 2)
-	index := readBytes(f, indexLen)
-
-	return sst.NewReader(bytes.NewReader(index), indexLen)
+	return sst.NewReader(newBoundReader(f, -8-indexLen, -8), indexLen)
 }

@@ -129,10 +129,5 @@ func findSpaceIndex(r io.ReadSeeker, offset, length int64) (*sst.Reader, error) 
 	r.Seek(footerOffset, 0)
 	indexLen := readInt64(r)
 
-	// We use the length of the SSTable to seek
-	// to the beginning of the index and read it.
-	r.Seek(footerOffset-indexLen, 0)
-	index := readBytes(r, indexLen)
-
-	return sst.NewReader(bytes.NewReader(index), indexLen)
+	return sst.NewReader(newBoundReader(r, footerOffset-indexLen, footerOffset), indexLen)
 }
