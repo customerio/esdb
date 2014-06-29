@@ -122,12 +122,12 @@ func (s *Space) findIndex(name, value string) *blocks.Reader {
 }
 
 func findSpaceIndex(r io.ReadSeeker, offset, length int64) (*sst.Reader, error) {
-	footerOffset := offset + length - 4
+	footerOffset := offset + length - 8
 
 	// The last 8 bytes in the file is the length
 	// of the SSTable grouping index.
 	r.Seek(footerOffset, 0)
-	indexLen := readInt32(r)
+	indexLen := readInt64(r)
 
 	// We use the length of the SSTable to seek
 	// to the beginning of the index and read it.

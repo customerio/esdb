@@ -128,5 +128,5 @@ func (w *spaceWriter) writeIndex(out *bytes.Buffer) (length int64, err error) {
 }
 
 func (w *spaceWriter) writeFooter(out *bytes.Buffer, indexLen int64) {
-	writeInt32(out, int(indexLen))
+	writeInt64(out, int(indexLen))
 }
