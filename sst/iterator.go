@@ -52,14 +52,14 @@ func (i *iterator) Key() []byte {
 	if i.soi {
 		return nil
 	}
-	return i.key[:len(i.key):len(i.key)]
+	return i.key[:]
 }
 
 func (i *iterator) Value() []byte {
 	if i.soi {
 		return nil
 	}
-	return i.val[:len(i.val):len(i.val)]
+	return i.val[:]
 }
 
 func (i *iterator) Close() error {
