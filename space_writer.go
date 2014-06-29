@@ -17,8 +17,8 @@ type spaceWriter struct {
 
 	written bool
 
-	groupings map[string]*index
-	indexes   map[string]*index
+	indexes    map[string]*index
+	indexNames sort.StringSlice
 }
 
 type index struct {
@@ -29,9 +29,10 @@ type index struct {
 
 func newSpace(writer io.Writer, id []byte) *spaceWriter {
 	return &spaceWriter{
-		Id:      id,
-		writer:  writer,
-		indexes: make(map[string]*index),
+		Id:         id,
+		writer:     writer,
+		indexes:    make(map[string]*index),
+		indexNames: make(sort.StringSlice, 0),
 	}
 }
 
@@ -40,82 +41,92 @@ func (w *spaceWriter) add(event *Event, grouping string, indexes map[string]stri
 		return errors.New("Cannot add to space. We're immutable and this one has already been written.")
 	}
 
-	addEventToIndex(w.indexes, "g"+grouping, event)
+	w.addEventToIndex("g"+grouping, event)
 
 	for name, val := range indexes {
-		addEventToIndex(w.indexes, "i"+name+":"+val, event)
+		w.addEventToIndex("i"+name+":"+val, event)
 	}
 
 	return nil
 }
 
-func (w *spaceWriter) write() (int64, error) {
+func (w *spaceWriter) addEventToIndex(name string, event *Event) {
+	if w.indexes[name] == nil {
+		w.indexes[name] = &index{evs: make(events, 0, 1)}
+		w.indexNames = append(w.indexNames, name)
+	}
+
+	w.indexes[name].evs = append(w.indexes[name].evs, event)
+}
+
+func (w *spaceWriter) write() (length int64, err error) {
 	if w.written {
 		return 0, nil
 	}
 
-	buf := bytes.NewBuffer([]byte{42})
+	buf := new(bytes.Buffer)
 
-	for _, name := range sortIndexes(w.indexes) {
-		w.indexes[name].offset = buf.Len()
-
-		if strings.HasPrefix(name, "g") {
-			writeEventBlocks(w.indexes[name], buf)
-		} else {
-			writeIndexBlocks(w.indexes[name], buf)
-		}
+	w.writeHeader(buf)
+	w.writeBlocks(buf)
+	if length, err = w.writeIndex(buf); err != nil {
+		return
 	}
-
-	if err := w.writeIndex(buf); err != nil {
-		return 0, err
-	}
+	w.writeFooter(buf, length)
 
 	w.written = true
 
 	return buf.WriteTo(w.writer)
 }
 
-func (w *spaceWriter) writeIndex(out io.Writer) error {
+func (w *spaceWriter) writeHeader(out *bytes.Buffer) {
+	// Magic character marking this as
+	// the start of a space section.
+	out.Write([]byte{42})
+}
+
+func (w *spaceWriter) writeBlocks(out *bytes.Buffer) {
+	sort.Stable(w.indexNames)
+
+	for _, name := range w.indexNames {
+		w.indexes[name].offset = out.Len()
+
+		if strings.HasPrefix(name, "g") {
+			writeEventBlocks(w.indexes[name], out)
+		} else {
+			writeIndexBlocks(w.indexes[name], out)
+		}
+	}
+}
+
+// The space index is a SSTable mapping grouping/index
+// names to their offsets in the file.
+func (w *spaceWriter) writeIndex(out *bytes.Buffer) (length int64, err error) {
 	buf := new(bytes.Buffer)
 	st := sst.NewWriter(buf)
 
-	for _, name := range sortIndexes(w.indexes) {
+	sort.Stable(w.indexNames)
+
+	// For each grouping or index, we index the section's
+	// byte offset in the file and the length in bytes
+	// of all data in the grouping/index.
+	for _, name := range w.indexNames {
 		buf := new(bytes.Buffer)
 
 		writeUvarint(buf, w.indexes[name].offset)
 		writeUvarint(buf, w.indexes[name].length)
 
-		if err := st.Set([]byte(name), buf.Bytes()); err != nil {
-			return err
+		if err = st.Set([]byte(name), buf.Bytes()); err != nil {
+			return
 		}
 	}
 
-	if err := st.Close(); err != nil {
-		return err
+	if err = st.Close(); err != nil {
+		return
 	}
 
-	writeInt32(buf, buf.Len())
-
-	_, err := buf.WriteTo(out)
-	return err
+	return buf.WriteTo(out)
 }
 
-func addEventToIndex(indexes map[string]*index, name string, event *Event) {
-	if indexes[name] == nil {
-		indexes[name] = &index{evs: make(events, 0, 1)}
-	}
-
-	indexes[name].evs = append(indexes[name].evs, event)
-}
-
-func sortIndexes(indexes map[string]*index) []string {
-	names := make(sort.StringSlice, 0, len(indexes))
-
-	for name, _ := range indexes {
-		names = append(names, name)
-	}
-
-	sort.Stable(names)
-
-	return names
+func (w *spaceWriter) writeFooter(out *bytes.Buffer, indexLen int64) {
+	writeInt32(out, int(indexLen))
 }
