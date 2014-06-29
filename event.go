@@ -15,7 +15,7 @@ func (e events) Swap(i, j int)      { e[i], e[j] = e[j], e[i] }
 type Event struct {
 	Data      []byte
 	Timestamp int
-	block     int
+	block     int64
 	offset    int
 }
 

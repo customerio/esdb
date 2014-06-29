@@ -44,7 +44,7 @@ func TestWriteEventBlocksSmall(t *testing.T) {
 
 	var tests = []struct {
 		event  *Event
-		block  int
+		block  int64
 		offset int
 	}{
 		{e1, 0, 8},
@@ -76,7 +76,7 @@ func TestWriteEventBlocksMedium(t *testing.T) {
 
 	var tests = []struct {
 		event  *Event
-		block  int
+		block  int64
 		offset int
 	}{
 		{e1, 411, 214},
@@ -122,7 +122,7 @@ func TestWriteEventBlocksLarge(t *testing.T) {
 
 	var tests = []struct {
 		event  *Event
-		block  int
+		block  int64
 		offset int
 	}{
 		{e1, 2802, 2665},

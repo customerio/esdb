@@ -144,7 +144,7 @@ func TestWriteSpaceIndexes(t *testing.T) {
 			block := readInt64(reader)
 			offset := readInt16(reader)
 
-			if int(block) != event.block || int(offset) != event.offset {
+			if block != event.block || int(offset) != event.offset {
 				t.Errorf("Case %d/%d: Wrong event index: want: %d,%d found: %d,%d", i, j, event.block, event.offset, block, offset)
 			}
 		}

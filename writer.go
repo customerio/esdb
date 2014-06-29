@@ -80,7 +80,7 @@ func (w *Writer) Write() (err error) {
 		return err
 	}
 
-	return w.writeFooter(int(length))
+	return w.writeFooter(length)
 }
 
 func (w *Writer) writeSpace(space *spaceWriter) (err error) {
@@ -89,7 +89,7 @@ func (w *Writer) writeSpace(space *spaceWriter) (err error) {
 	if err == nil {
 		w.spaceIds = append(w.spaceIds, string(space.Id))
 		w.spaceOffsets[string(space.Id)] = w.offset
-		w.spaceLengths[string(space.Id)] = length
+		w.spaceLengths[string(space.Id)] = int64(length)
 		delete(w.spaces, string(space.Id))
 		w.offset += length
 	}
@@ -113,8 +113,8 @@ func (w *Writer) writeIndex() (int64, error) {
 	for _, spaceId := range w.spaceIds {
 		b := new(bytes.Buffer)
 
-		writeInt64(b, int(w.spaceOffsets[spaceId]))
-		writeInt64(b, int(w.spaceLengths[spaceId]))
+		writeInt64(b, w.spaceOffsets[spaceId])
+		writeInt64(b, w.spaceLengths[spaceId])
 
 		if err := st.Set([]byte(spaceId), b.Bytes()); err != nil {
 			return 0, err
@@ -128,7 +128,7 @@ func (w *Writer) writeIndex() (int64, error) {
 	return buf.WriteTo(w.file)
 }
 
-func (w *Writer) writeFooter(indexLen int) (err error) {
+func (w *Writer) writeFooter(indexLen int64) (err error) {
 	buf := new(bytes.Buffer)
 
 	writeInt64(buf, indexLen)

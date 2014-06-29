@@ -22,8 +22,8 @@ type spaceWriter struct {
 }
 
 type index struct {
-	offset int
-	length int
+	offset int64
+	length int64
 	evs    events
 }
 
@@ -64,43 +64,73 @@ func (w *spaceWriter) write() (length int64, err error) {
 		return 0, nil
 	}
 
-	buf := new(bytes.Buffer)
-
-	w.writeHeader(buf)
-	w.writeBlocks(buf)
-	if length, err = w.writeIndex(buf); err != nil {
+	n, err := w.writeHeader(length, w.writer)
+	length += n
+	if err != nil {
 		return
 	}
-	w.writeFooter(buf, length)
+
+	n, err = w.writeBlocks(length, w.writer)
+	length += n
+	if err != nil {
+		return
+	}
+
+	indexN, err := w.writeIndex(length, w.writer)
+	length += indexN
+	if err != nil {
+		return
+	}
+
+	n, err = w.writeFooter(length, w.writer, indexN)
+	length += n
+	if err != nil {
+		return
+	}
 
 	w.written = true
 
-	return buf.WriteTo(w.writer)
+	return
 }
 
-func (w *spaceWriter) writeHeader(out *bytes.Buffer) {
+func (w *spaceWriter) writeHeader(written int64, out io.Writer) (int64, error) {
 	// Magic character marking this as
 	// the start of a space section.
-	out.Write([]byte{42})
+	n, err := out.Write([]byte{42})
+	return int64(n), err
 }
 
-func (w *spaceWriter) writeBlocks(out *bytes.Buffer) {
+func (w *spaceWriter) writeBlocks(written int64, out io.Writer) (int64, error) {
 	sort.Stable(w.indexNames)
 
+	off := written
+
 	for _, name := range w.indexNames {
-		w.indexes[name].offset = out.Len()
+		w.indexes[name].offset = off
+
+		buf := new(bytes.Buffer)
 
 		if strings.HasPrefix(name, "g") {
-			writeEventBlocks(w.indexes[name], out)
+			writeEventBlocks(w.indexes[name], buf)
 		} else {
-			writeIndexBlocks(w.indexes[name], out)
+			writeIndexBlocks(w.indexes[name], buf)
+		}
+
+		w.indexes[name].evs = nil
+
+		n, err := buf.WriteTo(out)
+		off += n
+		if err != nil {
+			return off, err
 		}
 	}
+
+	return off - written, nil
 }
 
 // The space index is a SSTable mapping grouping/index
 // names to their offsets in the file.
-func (w *spaceWriter) writeIndex(out *bytes.Buffer) (length int64, err error) {
+func (w *spaceWriter) writeIndex(written int64, out io.Writer) (length int64, err error) {
 	buf := new(bytes.Buffer)
 	st := sst.NewWriter(buf)
 
@@ -112,8 +142,8 @@ func (w *spaceWriter) writeIndex(out *bytes.Buffer) (length int64, err error) {
 	for _, name := range w.indexNames {
 		buf := new(bytes.Buffer)
 
-		writeUvarint(buf, w.indexes[name].offset)
-		writeUvarint(buf, w.indexes[name].length)
+		writeUvarint64(buf, w.indexes[name].offset)
+		writeUvarint64(buf, w.indexes[name].length)
 
 		if err = st.Set([]byte(name), buf.Bytes()); err != nil {
 			return
@@ -127,6 +157,8 @@ func (w *spaceWriter) writeIndex(out *bytes.Buffer) (length int64, err error) {
 	return buf.WriteTo(out)
 }
 
-func (w *spaceWriter) writeFooter(out *bytes.Buffer, indexLen int64) {
-	writeInt64(out, int(indexLen))
+func (w *spaceWriter) writeFooter(written int64, out io.Writer, indexLen int64) (length int64, err error) {
+	buf := new(bytes.Buffer)
+	writeInt64(buf, indexLen)
+	return buf.WriteTo(out)
 }

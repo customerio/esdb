@@ -18,7 +18,7 @@ func writeEventBlocks(i *index, out io.Writer) {
 
 	for _, event := range i.evs {
 		// mark event with the current location in the file.
-		event.block = i.offset + writer.Written
+		event.block = i.offset + int64(writer.Written)
 		event.offset = writer.Buffered()
 
 		// push the encoded event onto the buffer.
@@ -30,5 +30,5 @@ func writeEventBlocks(i *index, out io.Writer) {
 
 	writer.Flush()
 
-	i.length += writer.Written
+	i.length += int64(writer.Written)
 }

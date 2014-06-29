@@ -51,7 +51,7 @@ func TestWriteIndexBlocksSmall(t *testing.T) {
 		block := readInt64(reader)
 		offset := readInt16(reader)
 
-		if event.block != int(block) || event.offset != int(offset) {
+		if event.block != block || event.offset != int(offset) {
 			t.Errorf("Case %d: Wrong read event block/offset. wanted: %d,%d found: %d,%d", i, event.block, event.offset, block, offset)
 		}
 	}
@@ -63,7 +63,7 @@ func TestWriteIndexBlocksMedium(t *testing.T) {
 	index := &index{evs: make(events, 500)}
 
 	for i := 0; i < 500; i++ {
-		index.evs[i] = &Event{Timestamp: i, block: int(rand.Int63()), offset: rand.Intn(4096)}
+		index.evs[i] = &Event{Timestamp: i, block: rand.Int63(), offset: rand.Intn(4096)}
 	}
 
 	writeIndexBlocks(index, w)
@@ -78,7 +78,7 @@ func TestWriteIndexBlocksMedium(t *testing.T) {
 		block := readInt64(reader)
 		offset := readInt16(reader)
 
-		if event.block != int(block) || event.offset != int(offset) {
+		if event.block != block || event.offset != int(offset) {
 			t.Errorf("Case %d: Wrong read event block/offset. wanted: %d,%d found: %d,%d", i, event.block, event.offset, block, offset)
 		}
 	}
@@ -90,7 +90,7 @@ func TestWriteIndexBlocksLarge(t *testing.T) {
 	index := &index{evs: make(events, 5000)}
 
 	for i := 0; i < 5000; i++ {
-		index.evs[i] = &Event{Timestamp: i, block: int(rand.Int63()), offset: rand.Intn(4096)}
+		index.evs[i] = &Event{Timestamp: i, block: rand.Int63(), offset: rand.Intn(4096)}
 	}
 
 	writeIndexBlocks(index, w)
@@ -105,7 +105,7 @@ func TestWriteIndexBlocksLarge(t *testing.T) {
 		block := readInt64(reader)
 		offset := readInt16(reader)
 
-		if event.block != int(block) || event.offset != int(offset) {
+		if event.block != block || event.offset != int(offset) {
 			t.Errorf("Case %d: Wrong read event block/offset. wanted: %d,%d found: %d,%d", i, event.block, event.offset, block, offset)
 		}
 	}

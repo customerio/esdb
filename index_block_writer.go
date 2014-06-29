@@ -30,5 +30,5 @@ func writeIndexBlocks(i *index, out io.Writer) {
 
 	writer.Flush()
 
-	i.length += writer.Written
+	i.length += int64(writer.Written)
 }
