@@ -12,7 +12,7 @@ func create(id []byte) *Space {
 	populateSpace(writer)
 	writer.write()
 
-	return openSpace(bytes.NewReader(buffer.Bytes()), []byte("a"), 0, uint64(buffer.Len()))
+	return openSpace(bytes.NewReader(buffer.Bytes()), []byte("a"), 0, int64(buffer.Len()))
 }
 
 func populateSpace(space *spaceWriter) {

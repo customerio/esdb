@@ -1,9 +1,7 @@
 package esdb
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/binary"
 	"io"
 
 	"github.com/customerio/esdb/blocks"
@@ -17,12 +15,12 @@ type Space struct {
 
 	reader io.ReadSeeker
 	blocks *blocks.Reader
-	offset uint64
-	length uint64
+	offset int64
+	length int64
 	index  *sst.Reader
 }
 
-func openSpace(reader io.ReadSeeker, id []byte, offset, length uint64) *Space {
+func openSpace(reader io.ReadSeeker, id []byte, offset, length int64) *Space {
 	if st, err := findSpaceIndex(reader, offset, length); err == nil {
 
 		return &Space{
@@ -40,7 +38,7 @@ func openSpace(reader io.ReadSeeker, id []byte, offset, length uint64) *Space {
 
 func (s *Space) Scan(grouping string, scanner Scanner) {
 	if offset := s.findGroupingOffset(grouping); offset > 0 {
-		s.blocks.Seek(int64(s.offset+offset), 0)
+		s.blocks.Seek(s.offset+offset, 0)
 
 		for event := pullEvent(s.blocks); event != nil; {
 			if !scanner(event) {
@@ -58,13 +56,11 @@ func (s *Space) ScanIndex(name, value string, scanner Scanner) {
 			return
 		}
 
-		var block uint64
-		var offset uint16
-		binary.Read(reader, binary.LittleEndian, &block)
-		binary.Read(reader, binary.LittleEndian, &offset)
+		block := readInt64(reader)
+		offset := readInt16(reader)
 
-		s.blocks.Seek(int64(s.offset+block), 0)
-		s.blocks.Read(make([]byte, offset))
+		s.blocks.Seek(s.offset+block, 0)
+		readBytes(s.blocks, offset)
 
 		for event := pullEvent(s.blocks); block > 0 && event != nil; {
 			if !scanner(event) {
@@ -75,21 +71,20 @@ func (s *Space) ScanIndex(name, value string, scanner Scanner) {
 				return
 			}
 
-			binary.Read(reader, binary.LittleEndian, &block)
-			binary.Read(reader, binary.LittleEndian, &offset)
+			block = readInt64(reader)
+			offset = readInt16(reader)
 
-			s.blocks.Seek(int64(s.offset+block), 0)
-			s.blocks.Read(make([]byte, offset))
+			s.blocks.Seek(s.offset+block, 0)
+			readBytes(s.blocks, offset)
 
 			event = pullEvent(s.blocks)
 		}
 	}
 }
 
-func (s *Space) findGroupingOffset(name string) uint64 {
+func (s *Space) findGroupingOffset(name string) int64 {
 	if val, err := s.index.Get([]byte("g" + name)); err == nil {
-		num, _ := binary.ReadUvarint(bytes.NewReader(val))
-		return num
+		return readUvarint(bytes.NewReader(val))
 	}
 
 	return 0
@@ -97,28 +92,25 @@ func (s *Space) findGroupingOffset(name string) uint64 {
 
 func (s *Space) findIndex(name, value string) *blocks.Reader {
 	if val, err := s.index.Get([]byte("i" + name + ":" + value)); err == nil {
-		meta := bufio.NewReader(bytes.NewReader(val))
-
-		offset, _ := binary.ReadUvarint(meta)
-		//length, _ := binary.ReadUvarint(meta)
+		offset := readUvarint(bytes.NewReader(val))
 
 		reader := blocks.NewReader(s.reader, 4096)
-		reader.Seek(int64(s.offset+offset), 0)
+		reader.Seek(s.offset+offset, 0)
+
 		return reader
 	}
 
 	return nil
 }
 
-func findSpaceIndex(r io.ReadSeeker, offset, length uint64) (*sst.Reader, error) {
-	r.Seek(int64(offset+length-4), 0)
+func findSpaceIndex(r io.ReadSeeker, offset, length int64) (*sst.Reader, error) {
+	footerOffset := offset + length - 4
 
-	var indexLength int32
-	binary.Read(r, binary.LittleEndian, &indexLength)
+	r.Seek(footerOffset, 0)
+	indexLen := readInt32(r)
 
-	r.Seek(int64(offset+length-4-uint64(indexLength)), 0)
-	index := make([]byte, indexLength)
-	r.Read(index)
+	r.Seek(footerOffset-indexLen, 0)
+	index := readBytes(r, indexLen)
 
-	return sst.NewReader(bytes.NewReader(index), int64(indexLength))
+	return sst.NewReader(bytes.NewReader(index), indexLen)
 }

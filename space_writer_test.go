@@ -1,9 +1,7 @@
 package esdb
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/binary"
 	"reflect"
 	"testing"
 
@@ -38,7 +36,7 @@ func TestWriteSpaceGrouping(t *testing.T) {
 
 	writer.write()
 
-	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, uint64(w.Len()))
+	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, int64(w.Len()))
 
 	var tests = []struct {
 		key    string
@@ -52,10 +50,10 @@ func TestWriteSpaceGrouping(t *testing.T) {
 
 	for i, test := range tests {
 		val, _ := sst.Get([]byte(test.key))
-		buf := bufio.NewReader(bytes.NewReader(val))
+		r := bytes.NewReader(val)
 
-		offset, _ := binary.ReadUvarint(buf)
-		length, _ := binary.ReadUvarint(buf)
+		offset := readUvarint(r)
+		length := readUvarint(r)
 
 		if int(offset) != test.offset || int(length) != test.length {
 			t.Errorf("Case %d: Wrong grouping encoding: want: %d,%d found: %d,%d", i, test.offset, test.length, offset, length)
@@ -105,15 +103,15 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		{"ia:2", 38, 23, nil, events{e2, e3}},
 	}
 
-	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, uint64(w.Len()))
+	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, int64(w.Len()))
 
 	for i, test := range tests {
 		val, _ := sst.Get([]byte(test.key))
 
-		buf := bufio.NewReader(bytes.NewReader(val))
+		r := bytes.NewReader(val)
 
-		offset, _ := binary.ReadUvarint(buf)
-		length, _ := binary.ReadUvarint(buf)
+		offset := readUvarint(r)
+		length := readUvarint(r)
 
 		if int(offset) != test.offset || int(length) != test.length {
 			t.Errorf("Case %d: Wrong grouping encoding: want: %d,%d found: %d,%d", i, test.offset, test.length, offset, length)
@@ -135,11 +133,8 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		}
 
 		for j, event := range test.indexed {
-
-			var block uint64
-			var offset uint16
-			binary.Read(reader, binary.LittleEndian, &block)
-			binary.Read(reader, binary.LittleEndian, &offset)
+			block := readInt64(reader)
+			offset := readInt16(reader)
 
 			if int(block) != event.block || int(offset) != event.offset {
 				t.Errorf("Case %d/%d: Wrong event index: want: %d,%d found: %d,%d", i, j, event.block, event.offset, block, offset)

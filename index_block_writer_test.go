@@ -2,7 +2,6 @@ package esdb
 
 import (
 	"bytes"
-	"encoding/binary"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -49,10 +48,8 @@ func TestWriteIndexBlocksSmall(t *testing.T) {
 	reader := blocks.NewByteReader(w.Bytes(), 4096)
 
 	for i, event := range index.evs {
-		var block uint64
-		var offset uint16
-		binary.Read(reader, binary.LittleEndian, &block)
-		binary.Read(reader, binary.LittleEndian, &offset)
+		block := readInt64(reader)
+		offset := readInt16(reader)
 
 		if event.block != int(block) || event.offset != int(offset) {
 			t.Errorf("Case %d: Wrong read event block/offset. wanted: %d,%d found: %d,%d", i, event.block, event.offset, block, offset)
@@ -78,10 +75,8 @@ func TestWriteIndexBlocksMedium(t *testing.T) {
 	reader := blocks.NewByteReader(w.Bytes(), 4096)
 
 	for i, event := range index.evs {
-		var block uint64
-		var offset uint16
-		binary.Read(reader, binary.LittleEndian, &block)
-		binary.Read(reader, binary.LittleEndian, &offset)
+		block := readInt64(reader)
+		offset := readInt16(reader)
 
 		if event.block != int(block) || event.offset != int(offset) {
 			t.Errorf("Case %d: Wrong read event block/offset. wanted: %d,%d found: %d,%d", i, event.block, event.offset, block, offset)
@@ -107,10 +102,8 @@ func TestWriteIndexBlocksLarge(t *testing.T) {
 	reader := blocks.NewByteReader(w.Bytes(), 4096)
 
 	for i, event := range index.evs {
-		var block uint64
-		var offset uint16
-		binary.Read(reader, binary.LittleEndian, &block)
-		binary.Read(reader, binary.LittleEndian, &offset)
+		block := readInt64(reader)
+		offset := readInt16(reader)
 
 		if event.block != int(block) || event.offset != int(offset) {
 			t.Errorf("Case %d: Wrong read event block/offset. wanted: %d,%d found: %d,%d", i, event.block, event.offset, block, offset)

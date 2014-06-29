@@ -2,7 +2,6 @@ package esdb
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"io"
 	"sort"
@@ -83,13 +82,8 @@ func (w *spaceWriter) writeIndex(out io.Writer) error {
 	for _, name := range sortIndexes(w.indexes) {
 		buf := new(bytes.Buffer)
 
-		b := make([]byte, 8)
-		n := binary.PutUvarint(b, uint64(w.indexes[name].offset))
-		buf.Write(b[:n])
-
-		b = make([]byte, 8)
-		n = binary.PutUvarint(b, uint64(w.indexes[name].length))
-		buf.Write(b[:n])
+		writeUvarint(buf, w.indexes[name].offset)
+		writeUvarint(buf, w.indexes[name].length)
 
 		if err := st.Set([]byte(name), buf.Bytes()); err != nil {
 			return err
@@ -100,7 +94,7 @@ func (w *spaceWriter) writeIndex(out io.Writer) error {
 		return err
 	}
 
-	binary.Write(buf, binary.LittleEndian, int32(buf.Len()))
+	writeInt32(buf, buf.Len())
 
 	_, err := buf.WriteTo(out)
 	return err

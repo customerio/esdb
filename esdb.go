@@ -2,7 +2,6 @@ package esdb
 
 import (
 	"bytes"
-	"encoding/binary"
 	"os"
 	"sync"
 
@@ -57,22 +56,19 @@ func (db *Db) Close() {
 
 func findIndex(f *os.File) (*sst.Reader, error) {
 	f.Seek(-8, 2)
+	indexLen := readInt64(f)
 
-	var indexLength int64
-	binary.Read(f, binary.LittleEndian, &indexLength)
+	f.Seek(-8-indexLen, 2)
+	index := readBytes(f, indexLen)
 
-	f.Seek(-8-indexLength, 2)
-	index := make([]byte, indexLength)
-	f.Read(index)
-
-	return sst.NewReader(bytes.NewReader(index), indexLength)
+	return sst.NewReader(bytes.NewReader(index), indexLen)
 }
 
-func readLocation(data []byte) []uint64 {
-	var offset, length uint64
+func readLocation(data []byte) []int64 {
+	r := bytes.NewReader(data)
 
-	binary.Read(bytes.NewReader(data[:8]), binary.LittleEndian, &offset)
-	binary.Read(bytes.NewReader(data[8:]), binary.LittleEndian, &length)
+	offset := readInt64(r)
+	length := readInt64(r)
 
-	return []uint64{offset, length}
+	return []int64{offset, length}
 }

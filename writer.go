@@ -2,7 +2,6 @@ package esdb
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"os"
 	"sort"
@@ -84,8 +83,8 @@ func (w *Writer) write() error {
 	for _, spaceId := range spaceIds {
 		b := new(bytes.Buffer)
 
-		binary.Write(b, binary.LittleEndian, w.spaceOffsets[spaceId])
-		binary.Write(b, binary.LittleEndian, w.spaceLengths[spaceId])
+		writeInt64(b, int(w.spaceOffsets[spaceId]))
+		writeInt64(b, int(w.spaceLengths[spaceId]))
 
 		if err := st.Set([]byte(spaceId), b.Bytes()); err != nil {
 			return err
@@ -96,7 +95,8 @@ func (w *Writer) write() error {
 		return err
 	}
 
-	binary.Write(buf, binary.LittleEndian, int64(buf.Len()))
+	writeInt64(buf, buf.Len())
+
 	_, err := buf.WriteTo(w.file)
 	return err
 }
