@@ -2,10 +2,24 @@ package blocks
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"reflect"
 	"testing"
 )
+
+func ExampleReader() {
+	reader := NewReader(bytes.NewReader(
+		[]byte("\x05\x00\x00hello\x05\x00\x00 worl\x01\x00\x00d"),
+	), 5)
+
+	result := make([]byte, 11)
+	n, _ := reader.Read(result)
+
+	fmt.Printf("%q", result[:n])
+
+	// Output: "hello world"
+}
 
 func TestRead(t *testing.T) {
 	var tests = []struct {

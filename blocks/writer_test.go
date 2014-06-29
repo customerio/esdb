@@ -2,11 +2,24 @@ package blocks
 
 import (
 	"bytes"
+	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/dgryski/go-csnappy"
 )
+
+func ExampleWriter() {
+	buffer := new(bytes.Buffer)
+	writer := NewWriter(buffer, 5)
+
+	writer.Write([]byte("hello world"))
+	writer.Flush()
+
+	fmt.Printf("%q", buffer.Bytes())
+
+	// Output: "\x05\x00\x00hello\x05\x00\x00 worl\x01\x00\x00d"
+}
 
 func TestWriterSmallBlockSize(t *testing.T) {
 	buffer := new(bytes.Buffer)
