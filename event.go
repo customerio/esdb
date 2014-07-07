@@ -23,18 +23,22 @@ func newEvent(data []byte, timestamp int) *Event {
 	return &Event{data, timestamp, 0, 0}
 }
 
+// Events are encoded in the following byte format:
+// [Uvarint:length][int32:timestamp][bytes(length):data]
 func (e *Event) push(out io.Writer) {
 	writeUvarint(out, len(e.Data))
+	writeInt32(out, e.Timestamp)
 	out.Write(e.Data)
 	e.Data = nil
 }
 
 func pullEvent(r *blocks.Reader) (e *Event) {
 	size := readUvarint(r)
+	timestamp := int(readInt32(r))
 	data := readBytes(r, size)
 
 	if len(data) > 0 {
-		e = &Event{Data: data}
+		e = &Event{Data: data, Timestamp: timestamp}
 	}
 
 	return

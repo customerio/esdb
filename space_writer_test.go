@@ -43,13 +43,14 @@ func TestWriteSpaceGrouping(t *testing.T) {
 	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, int64(w.Len()))
 
 	var tests = []struct {
-		key    string
-		offset int
-		length int
-		evs    [][]byte
+		key        string
+		offset     int
+		length     int
+		data       [][]byte
+		timestamps []int
 	}{
-		{"g1", 1, 12, [][]byte{e4data, e1data}},
-		{"g2", 13, 8, [][]byte{e2data, e3data}},
+		{"g1", 1, 20, [][]byte{e4data, e1data}, []int{4, 1}},
+		{"g2", 21, 16, [][]byte{e2data, e3data}, []int{3, 2}},
 	}
 
 	for i, test := range tests {
@@ -66,9 +67,21 @@ func TestWriteSpaceGrouping(t *testing.T) {
 		reader := blocks.NewByteReader(w.Bytes(), 4096)
 		reader.Seek(int64(offset), 0)
 
-		for j, data := range test.evs {
-			if e := pullEvent(reader); !reflect.DeepEqual(e.Data, data) {
-				t.Errorf("Case %d/%d: Wrong event found: want: %s found: %s", i, j, data, e.Data)
+		for j, data := range test.data {
+			found := pullEvent(reader)
+
+			if string(found.Data) != string(data) {
+				t.Errorf("Case %d/%d: Wrong event data found: want: %s found: %s", i, j, data, found.Data)
+			}
+		}
+
+		reader.Seek(int64(offset), 0)
+
+		for j, ts := range test.timestamps {
+			found := pullEvent(reader)
+
+			if found.Timestamp != ts {
+				t.Errorf("Case %d/%d: Wrong event timestamp found: want: %d found: %d", i, j, ts, found.Timestamp)
 			}
 		}
 
@@ -106,9 +119,9 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		evs     [][]byte
 		indexed events
 	}{
-		{"g1", 1, 16, [][]byte{e4data, e2data, e3data, e1data}, nil},
-		{"ia:1", 17, 21, nil, events{e4, e1}},
-		{"ia:2", 38, 23, nil, events{e2, e3}},
+		{"g1", 1, 32, [][]byte{e4data, e2data, e3data, e1data}, nil},
+		{"ia:1", 33, 21, nil, events{e4, e1}},
+		{"ia:2", 54, 23, nil, events{e2, e3}},
 	}
 
 	sst, _ := findSpaceIndex(bytes.NewReader(w.Bytes()), 0, int64(w.Len()))
