@@ -30,9 +30,7 @@ func populateSpace(space *spaceWriter) {
 func fetchPrimary(space *Space, primary string) []string {
 	found := make([]string, 0)
 
-	fetch := space.Scan
-
-	fetch(primary, func(event *Event) bool {
+	space.Scan(primary, func(event *Event) bool {
 		found = append(found, string(event.Data))
 		return true
 	})
@@ -91,5 +89,20 @@ func TestSpacePrimaryScanning(t *testing.T) {
 		if !reflect.DeepEqual(test.want, found) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.want, found)
 		}
+	}
+}
+
+func TestSpacePrimaryIteration(t *testing.T) {
+	space := create([]byte("a"))
+
+	found := make([]string, 0)
+
+	space.Iterate(func(grouping string) bool {
+		found = append(found, grouping)
+		return true
+	})
+
+	if !reflect.DeepEqual([]string{"a", "b"}, found) {
+		t.Errorf("Incorrect space groupings found. wanted: %v, found: %v", []string{"a", "b"}, found)
 	}
 }

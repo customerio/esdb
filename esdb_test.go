@@ -94,6 +94,21 @@ func TestSpaceIndexes(t *testing.T) {
 	}
 }
 
+func TestSpaceIteration(t *testing.T) {
+	db := createDb()
+
+	found := make([]string, 0)
+
+	db.Iterate(func(space *Space) bool {
+		found = append(found, string(space.Id))
+		return true
+	})
+
+	if !reflect.DeepEqual([]string{"a", "b"}, found) {
+		t.Errorf("Incorrect spaces found. wanted: %v, found: %v", []string{"a", "b"}, found)
+	}
+}
+
 func TestBigEvent(t *testing.T) {
 	os.MkdirAll("tmp", 0755)
 	os.Remove("tmp/test.esdb")

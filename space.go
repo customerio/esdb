@@ -3,6 +3,7 @@ package esdb
 import (
 	"bytes"
 	"io"
+	"strings"
 
 	"github.com/customerio/esdb/blocks"
 	"github.com/customerio/esdb/sst"
@@ -36,6 +37,24 @@ func openSpace(reader io.ReadSeeker, id []byte, offset, length int64) *Space {
 	}
 
 	return nil
+}
+
+// Iterates over grouping index and returns each grouping.
+func (s *Space) Iterate(process func(g string) bool) error {
+	if iter, err := s.index.Find([]byte("")); err == nil {
+
+		for iter.Next() {
+			if strings.HasPrefix(string(iter.Key()), "g") {
+				if !process(string(iter.Key()[1:])) {
+					break
+				}
+			}
+		}
+
+		return nil
+	} else {
+		return err
+	}
 }
 
 func (s *Space) Scan(grouping string, scanner Scanner) {

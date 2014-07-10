@@ -57,6 +57,22 @@ func (db *Db) Find(id []byte) *Space {
 	return nil
 }
 
+// Iterates and returns each defined space.
+func (db *Db) Iterate(process func(s *Space) bool) error {
+	if iter, err := db.index.Find([]byte("")); err == nil {
+
+		for iter.Next() {
+			if !process(db.Find(iter.Key())) {
+				break
+			}
+		}
+
+		return nil
+	} else {
+		return err
+	}
+}
+
 func (db *Db) Close() {
 	if db.file != nil {
 		db.file.Close()
