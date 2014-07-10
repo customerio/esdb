@@ -95,7 +95,6 @@ func TestSpaceIndexes(t *testing.T) {
 }
 
 func TestBigEvent(t *testing.T) {
-	println("TEST")
 	os.MkdirAll("tmp", 0755)
 	os.Remove("tmp/test.esdb")
 
@@ -132,7 +131,6 @@ func TestBigEvent(t *testing.T) {
 
 	db.Find([]byte("a")).Scan("", func(e *Event) bool {
 		if string(e.Data) != string(evs[i].Data) {
-			println("ffffffail", len(e.Data), len(evs[i].Data))
 			t.Errorf("Case %d: Wrong event data: want: %s found: %s", i, string(evs[i].Data), string(e.Data))
 		}
 		i += 1

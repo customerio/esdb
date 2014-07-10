@@ -37,13 +37,13 @@ func NewReader(r io.ReadSeeker, blockSize int) *Reader {
 
 // Implements io.Reader interface.
 func (r *Reader) Read(p []byte) (n int, err error) {
-	r.fetch(len(p))
+	r.ensure(len(p))
 	return r.buffer.Read(p)
 }
 
 // Implements io.ByteReader interface.
 func (r *Reader) ReadByte() (c byte, err error) {
-	r.fetch(1)
+	r.ensure(1)
 
 	b := make([]byte, 1)
 
@@ -56,37 +56,40 @@ func (r *Reader) ReadByte() (c byte, err error) {
 // Returns the next n bytes in the buffer, without advancing.
 // A following call to Read will return the same bytes.
 func (r *Reader) Peek(n int) []byte {
-	r.fetch(n)
+	r.ensure(n)
 	return r.buffer.Bytes()[:n]
 }
 
-func (r *Reader) fetch(length int) error {
+// Ensure the buffer contains at least `length` bytes
+func (r *Reader) ensure(length int) (err error) {
 	for r.buffer.Len() < length {
-		block := make([]byte, headerLen(r.blockSize)+r.blockSize)
-		n, err := r.reader.Read(block)
-		r.scratch.Write(block[:n])
-
-		for r.buffer.Len() < length &&
-			r.scratch.Len() > headerLen(r.blockSize) {
-			r.parse()
-		}
+		err = r.fetchBlock()
 
 		if err != nil {
-			return err
+			return
 		}
 	}
 
-	return nil
+	return
 }
 
-// Parse uncompresses the next block in the
-// scratch buffer, and adds the uncompressed
-// content to the main reader buffer.
-func (r *Reader) parse() {
+// Fetches the next block from the underlying reader,
+// optionally decompresses it, and adds it to the buffer.
+func (r *Reader) fetchBlock() (err error) {
+	err = r.ensureScratch(uint(headerLen(r.blockSize)))
+	if err != nil {
+		return
+	}
+
 	head := make([]byte, headerLen(r.blockSize))
 	r.scratch.Read(head)
 
 	length, encoding := r.parseHeader(head)
+
+	err = r.ensureScratch(length)
+	if err != nil {
+		return
+	}
 
 	body := make([]byte, length)
 	n, _ := r.scratch.Read(body)
@@ -97,6 +100,21 @@ func (r *Reader) parse() {
 	} else {
 		r.buffer.Write(body[:n])
 	}
+
+	return
+}
+
+// Ensure the raw scratch space contains at least `length` bytes.
+func (r *Reader) ensureScratch(length uint) (err error) {
+	var n int
+
+	if uint(r.scratch.Len()) < length {
+		block := make([]byte, headerLen(r.blockSize)+r.blockSize)
+		n, err = r.reader.Read(block)
+		r.scratch.Write(block[:n])
+	}
+
+	return
 }
 
 // Implements io.Seeker interface. One limitiation we have is
