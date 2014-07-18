@@ -13,16 +13,16 @@ func (db *Db) InspectSpaces() ([]*Space) {
 }
 // Dumps out all the events in the database as a map of {Space: []Event}
 // (to preserve the extra space information)
-func (db *Db) DumpAll() map[*Space][]*Event {
+func (db *Db) DumpAll() map[string][]*Event {
 
-    var events map[*Space][]*Event
+    var events map[string][]*Event
 
-    events = make(map[*Space][]*Event)
+    events = make(map[string][]*Event)
 
     db.Iterate(func(s *Space) bool {
       s.Iterate(func(g string) bool {
         s.Scan(g, func(event *Event) bool {
-          events[s] = append(events[s], event)
+          events[string(s.Id)] = append(events[string(s.Id)], event)
           return true
         })
         return true
