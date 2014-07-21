@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/dgryski/go-csnappy"
+	"encoding/binary"
 )
 
 func ExampleWriter() {
@@ -130,4 +131,51 @@ func TestWriterState(t *testing.T) {
 			t.Errorf("Wrong blocks for write %d: want: %d got: %d", i, test.blocks, w.Blocks)
 		}
 	}
+}
+
+func TestMixedBlockCompression(t *testing.T) {
+	buffer := new(bytes.Buffer)
+	w := NewWriter(buffer, 32)
+
+	compressable := []byte{}
+
+	for i:=0; i<256; i++ {
+		compressable = append(compressable, 0x00)
+	}
+
+	for _, b := range []byte{0xc0, 0xf2, 0x2f, 0xa2, 0x0, 0x93, 0x8b, 0x10, 0xf3, 0xbf, 0x5, 0xe4, 0xfa, 0x84, 0x37, 0x8f, 0xf2, 0xc8, 0xb0, 0xdc, 0x76, 0xe0, 0xbc, 0x35, 0x64, 0xf4, 0x3d, 0xed, 0xd4, 0xa4, 0x68, 0xfd, 0xaf} {
+		compressable = append(compressable, b)
+	}
+
+	w.Write(compressable)
+	w.Flush()
+
+	var size uint
+
+	i := 0
+	encoded := []int{1, 1, 1, 1, 1, 1, 1, 1, 0, 0}
+
+	for buffer.Len() > 0{
+
+		n := fixedInt(32, 0)
+
+		if num, ok := n.(uint16); ok {
+			binary.Read(buffer, binary.LittleEndian, &num)
+			size = uint(num)
+		}
+
+		// Read next byte which is the block encoding.
+		b, _ := buffer.ReadByte()
+		encoding := int(b)
+
+		if encoding != encoded[i] {
+			t.Errorf("Encoding mismatch on write %d, expected: %d, got: %d", i, encoded[i], encoding)
+		}
+
+		block := make([]byte, size)
+		n, _ = buffer.Read(block)
+
+		i ++
+	}
+
 }
