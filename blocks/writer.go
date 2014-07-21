@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-
 	"github.com/dgryski/go-csnappy"
 )
 
@@ -68,13 +67,15 @@ func (w *Writer) Flush() (n int, err error) {
 }
 
 func (w *Writer) flush(size int) (n int, err error) {
-	var encoding = NO_COMPRESSION
+
 	var i int
 
 	// If we have enough buffered bytes, let's compress
 	// the data and write it out to the underlying io.Writer.
 	for w.buffer.Len() > size {
+
 		block := w.buffer.Next(w.blockSize)
+		var encoding = NO_COMPRESSION
 
 		// Data is only encoded if we successfully encode the block.
 		// Otherwise the block is identified as uncompressed.
