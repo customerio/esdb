@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 
+	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/sst"
 )
 
@@ -113,8 +114,8 @@ func (w *Writer) writeIndex() (int64, error) {
 	for _, spaceId := range w.spaceIds {
 		b := new(bytes.Buffer)
 
-		writeInt64(b, w.spaceOffsets[spaceId])
-		writeInt64(b, w.spaceLengths[spaceId])
+		binary.WriteInt64(b, w.spaceOffsets[spaceId])
+		binary.WriteInt64(b, w.spaceLengths[spaceId])
 
 		if err := st.Set([]byte(spaceId), b.Bytes()); err != nil {
 			return 0, err
@@ -131,7 +132,7 @@ func (w *Writer) writeIndex() (int64, error) {
 func (w *Writer) writeFooter(indexLen int64) (err error) {
 	buf := new(bytes.Buffer)
 
-	writeInt64(buf, indexLen)
+	binary.WriteInt64(buf, indexLen)
 
 	_, err = buf.WriteTo(w.file)
 

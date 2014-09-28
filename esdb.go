@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/sst"
 )
 
@@ -43,8 +44,8 @@ func (db *Db) Find(id []byte) *Space {
 		// The entry in the SSTable index is
 		// the offset and length of the space
 		// within the file.
-		offset := readInt64(b)
-		length := readInt64(b)
+		offset := binary.ReadInt64(b)
+		length := binary.ReadInt64(b)
 
 		return openSpace(
 			db.file,
@@ -83,7 +84,7 @@ func findIndex(f *os.File) (*sst.Reader, error) {
 	// The last 8 bytes in the file is the length
 	// of the SSTable spaces index.
 	f.Seek(-8, 2)
-	indexLen := readInt64(f)
+	indexLen := binary.ReadInt64(f)
 
 	return sst.NewReader(newBoundReader(f, -8-indexLen, -8), indexLen)
 }

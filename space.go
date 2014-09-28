@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/blocks"
 	"github.com/customerio/esdb/sst"
 )
@@ -87,14 +88,14 @@ func (s *Space) ScanIndex(name, value string, scanner Scanner) {
 			// event's block offset in the file, and a 16 bit integer
 			// for the event's offset within the block (as each block
 			// is 4096 bytes long)
-			block := readInt64(reader)
-			offset := readInt16(reader)
+			block := binary.ReadInt64(reader)
+			offset := binary.ReadInt16(reader)
 
 			// Move to the event's block
 			s.blocks.Seek(s.offset+block, 0)
 
 			// Read all data prior to the current event's offset.
-			readBytes(s.blocks, offset)
+			binary.ReadBytes(s.blocks, offset)
 
 			event := pullEvent(s.blocks)
 
@@ -112,7 +113,7 @@ func (s *Space) findGroupingOffset(name string) int64 {
 		// offset and length of the index within
 		// the file. In this case, we just need the
 		// offset to find it's starting point.
-		return readUvarint(bytes.NewReader(val))
+		return binary.ReadUvarint(bytes.NewReader(val))
 	}
 
 	return 0
@@ -126,7 +127,7 @@ func (s *Space) findIndex(name, value string) *blocks.Reader {
 		// offset and length of the index within
 		// the file. In this case, we just need the
 		// offset to find it's starting point.
-		offset := readUvarint(bytes.NewReader(val))
+		offset := binary.ReadUvarint(bytes.NewReader(val))
 
 		// An index is block encoded, so fire up
 		// a block reader, and seek to the start
@@ -146,7 +147,7 @@ func findSpaceIndex(r io.ReadSeeker, offset, length int64) (*sst.Reader, error) 
 	// The last 8 bytes in the file is the length
 	// of the SSTable grouping index.
 	r.Seek(footerOffset, 0)
-	indexLen := readInt64(r)
+	indexLen := binary.ReadInt64(r)
 
 	return sst.NewReader(newBoundReader(r, footerOffset-indexLen, footerOffset), indexLen)
 }
