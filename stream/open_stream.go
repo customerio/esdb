@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
@@ -9,7 +10,7 @@ import (
 )
 
 const (
-	MAGIC = "\x73\x74\x72\x65\x61\x6d" //\x57\xfb\x80\x8b\x24\x75\x47\xdb"
+	MAGIC = "\x73\x74\x72\x65\x61\x6d"
 )
 
 type openStream struct {
@@ -27,27 +28,45 @@ func New(path string) (Stream, error) {
 		return nil, err
 	}
 
-	offset, err := file.Write([]byte(MAGIC))
-	if err != nil {
-		return nil, err
-	}
-
-	return &openStream{
-		stream: file,
-		tails:  make(map[string]int64),
-		offset: int64(offset),
-	}, nil
+	return createOpenStream(file)
 }
 
 // Opens an existing open stream, populates tails,
 // offset, etc from written events.
 func Read(path string) (Stream, error) {
-	stream, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
 	}
 
+	return newOpenStream(file)
+}
+
+func createOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
+	_, err := stream.Seek(0, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	offset, err := stream.Write([]byte(MAGIC))
+	if err != nil {
+		return nil, err
+	}
+
+	return &openStream{
+		stream: stream,
+		tails:  make(map[string]int64),
+		offset: int64(offset),
+	}, nil
+}
+
+func newOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
 	s := &openStream{stream: stream}
+
+	_, err := stream.Seek(0, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	tails, offset, length, err := scan(s.stream)
 
@@ -71,9 +90,17 @@ func (s *openStream) Write(data []byte, indexes []string) (int, error) {
 
 	event := newEvent(data, offsets)
 
-	written, err := event.push(s.stream)
+	buf := bytes.NewBuffer([]byte{})
+
+	_, err := event.push(buf)
 	if err != nil {
-		return written, err
+		return 0, err
+	}
+
+	written, err := s.stream.Write(buf.Bytes())
+	if err != nil {
+		s.stream.Seek(s.offset, 0)
+		return 0, err
 	}
 
 	for _, index := range indexes {
@@ -152,7 +179,9 @@ func scan(stream io.Reader) (tails map[string]int64, offset int64, length int, e
 		length += 1
 	}
 
-	if err == io.EOF {
+	// If we reached the end of the file, or we
+	// couldn't decode the event, stop populating.
+	if err == io.EOF || err == CORRUPTED_EVENT {
 		err = nil
 	}
 

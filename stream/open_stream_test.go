@@ -1,6 +1,8 @@
 package stream
 
 import (
+	"errors"
+	"io"
 	"log"
 	"os"
 	"reflect"
@@ -30,6 +32,62 @@ func reopenStream() Stream {
 	}
 
 	return s
+}
+
+// byte buffer that satisfies io.ReadWriteSeeker
+type RWS struct {
+	buf        []byte
+	off        int
+	failWrites bool
+}
+
+func (b *RWS) Write(p []byte) (n int, err error) {
+	if b.failWrites {
+		n = len(p) / 2
+		b.grow(b.off + n)
+		n = copy(b.buf[b.off:], p[:n])
+		b.off += n
+		return n, errors.New("failed write!")
+	} else {
+		b.grow(b.off + len(p))
+		n = copy(b.buf[b.off:], p)
+		b.off += n
+		return
+	}
+}
+func (b *RWS) Read(p []byte) (n int, err error) {
+	if b.off >= len(b.buf) { // Note len(nil)==0
+		return 0, io.EOF
+	}
+	n = copy(p, b.buf[b.off:])
+	b.off += n
+	return
+}
+func (b *RWS) Seek(offset int64, whence int) (ret int64, err error) {
+	switch whence {
+	case 0:
+		ret = 0
+	case 1:
+		ret = int64(b.off)
+	case 2:
+		ret = int64(len(b.buf))
+	default:
+		return int64(b.off), io.EOF
+	}
+	ret += offset
+	if ret < 0 || int64(ret) != ret { // BUG: what to do if int64 cannot fit int
+		return int64(b.off), io.EOF
+	}
+	b.off = int(ret)
+	b.grow(b.off)
+	return
+}
+func (b *RWS) grow(n int) {
+	if n > cap(b.buf) {
+		buf := make([]byte, n, n)
+		copy(buf, b.buf[0:b.off])
+		b.buf = buf
+	}
 }
 
 func TestTails(t *testing.T) {
@@ -166,8 +224,92 @@ func TestReopenIterate(t *testing.T) {
 	}
 }
 
-// TODO failure of half-written event
-// TODO recovery of half-written event
-// TODO scan and iterate on reopened stream
+func TestRecoverCorruptedLog(t *testing.T) {
+	s := createStream()
+
+	s.Write([]byte("abc"), []string{"a", "b", "c"})
+	s.Write([]byte("cde"), []string{"c", "d", "e"})
+	s.Write([]byte("def"), []string{"d", "e", "f"})
+
+	// Write some bad data to the end of the log file.
+	s.(*openStream).stream.Write([]byte("rawr!"))
+
+	s = reopenStream()
+
+	found := make([]string, 0)
+
+	s.Iterate(func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return true
+	})
+
+	if !reflect.DeepEqual(found, []string{"abc", "cde", "def"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found)
+	}
+}
+
+func TestFailedWrite(t *testing.T) {
+	rws := &RWS{buf: make([]byte, 0)}
+	s, _ := createOpenStream(rws)
+
+	n, err := s.Write([]byte("abc"), []string{"a", "b", "c"})
+	if n != 18 || err != nil {
+		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+	}
+
+	n, err = s.Write([]byte("cde"), []string{"c", "d", "e"})
+	if n != 18 || err != nil {
+		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+	}
+
+	n, err = s.Write([]byte("def"), []string{"d", "e", "f"})
+	if n != 18 || err != nil {
+		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+	}
+
+	rws.failWrites = true
+	n, err = s.Write([]byte("efg"), []string{"e", "f", "g"})
+	if n != 0 || err == nil {
+		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+	}
+	rws.failWrites = false
+
+	n, err = s.Write([]byte("fgh"), []string{"f", "g", "h"})
+	if n != 18 || err != nil {
+		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+	}
+
+	found := make([]string, 0)
+
+	s.Iterate(func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return true
+	})
+
+	if !reflect.DeepEqual(found, []string{"abc", "cde", "def", "fgh"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def", "fgh"}, found)
+	}
+
+	// Let's write out the data in the RWS to a file
+	// and see if we can open it and read past the
+	// failed write.
+	log := createStream()
+	n, err = log.(*openStream).stream.Write(rws.buf[6:])
+	err = log.(*openStream).stream.(io.Closer).Close()
+
+	s = reopenStream()
+
+	found = make([]string, 0)
+
+	s.Iterate(func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return true
+	})
+
+	if !reflect.DeepEqual(found, []string{"abc", "cde", "def", "fgh"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def", "fgh"}, found)
+	}
+}
+
 // TODO test closing stream
 // TODO test error when writing to closed stream

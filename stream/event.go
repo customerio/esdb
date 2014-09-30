@@ -2,10 +2,13 @@ package stream
 
 import (
 	"bytes"
+	"errors"
 	"io"
 
 	"github.com/customerio/esdb/binary"
 )
+
+var CORRUPTED_EVENT = errors.New("corrupted event")
 
 type Event struct {
 	Data    []byte
@@ -71,6 +74,11 @@ func decodeEvent(b []byte) (*Event, error) {
 func pullEvent(r io.Reader) (*Event, error) {
 	if size := binary.ReadInt32(r); size > 0 {
 		data := binary.ReadBytes(r, size)
+
+		if len(data) < int(size) {
+			return nil, CORRUPTED_EVENT
+		}
+
 		return decodeEvent(data)
 	} else {
 		return nil, io.EOF
