@@ -24,6 +24,12 @@ func readonly(path string) (Stream, error) {
 		return nil, err
 	}
 
+	header := binary.ReadBytes(file, int64(len(MAGIC_HEADER)))
+
+	if string(header) != string(MAGIC_HEADER) {
+		return nil, CORRUPTED_HEADER
+	}
+
 	return newClosedStream(file)
 }
 
@@ -39,11 +45,13 @@ func newClosedStream(stream io.ReadSeeker) (Stream, error) {
 	}, nil
 }
 
-func (s *closedStream) Write(data []byte, indexes []string) (int, error) {
+func (s *closedStream) Write(data []byte, indexes map[string]string) (int, error) {
 	return 0, WRITING_TO_CLOSED_STREAM
 }
 
-func (s *closedStream) ScanIndex(index string, scanner Scanner) error {
+func (s *closedStream) ScanIndex(name, value string, scanner Scanner) error {
+	index := name + ":" + value
+
 	val, err := s.index.Get([]byte(index))
 	if err != nil {
 		return err
@@ -52,33 +60,11 @@ func (s *closedStream) ScanIndex(index string, scanner Scanner) error {
 	b := bytes.NewReader(val)
 	off := binary.ReadUvarint(b)
 
-	for off > 0 {
-		s.stream.Seek(off, 0)
-
-		if event, err := pullEvent(s.stream); err == nil {
-			scanner(event)
-			off = event.offsets[index]
-		} else {
-			return err
-		}
-	}
-
-	return nil
+	return scanIndex(s.stream, index, off, scanner)
 }
 
 func (s *closedStream) Iterate(scanner Scanner) error {
-	s.stream.Seek(int64(len(MAGIC_HEADER)), 0)
-
-	var event *Event
-	var err error
-
-	for err == nil {
-		if event, err = pullEvent(s.stream); err == nil {
-			scanner(event)
-		}
-	}
-
-	return nil
+	return iterate(s.stream, scanner)
 }
 
 func (s *closedStream) Closed() bool {

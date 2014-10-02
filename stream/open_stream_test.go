@@ -75,7 +75,7 @@ func (b *RWS) Seek(offset int64, whence int) (ret int64, err error) {
 		return int64(b.off), io.EOF
 	}
 	ret += offset
-	if ret < 0 || int64(ret) != ret { // BUG: what to do if int64 cannot fit int
+	if ret < 0 || int64(ret) != ret {
 		return int64(b.off), io.EOF
 	}
 	b.off = int(ret)
@@ -93,24 +93,25 @@ func (b *RWS) grow(n int) {
 func TestTails(t *testing.T) {
 	s := createStream()
 
-	len1, _ := s.Write([]byte("abc"), []string{"a", "b", "c"})
-	len2, _ := s.Write([]byte("cde"), []string{"c", "d", "e"})
-	s.Write([]byte("def"), []string{"d", "e", "f"})
+	len1, _ := s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	len2, _ := s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
+	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
 	var tests = []struct {
 		index  string
+		value  string
 		offset int64
 	}{
-		{"a", int64(len(MAGIC_HEADER))},
-		{"b", int64(len(MAGIC_HEADER))},
-		{"c", int64(len(MAGIC_HEADER) + len1)},
-		{"d", int64(len(MAGIC_HEADER) + len1 + len2)},
-		{"e", int64(len(MAGIC_HEADER) + len1 + len2)},
-		{"f", int64(len(MAGIC_HEADER) + len1 + len2)},
+		{"a", "a", int64(len(MAGIC_HEADER))},
+		{"b", "b", int64(len(MAGIC_HEADER))},
+		{"c", "c", int64(len(MAGIC_HEADER) + len1)},
+		{"d", "d", int64(len(MAGIC_HEADER) + len1 + len2)},
+		{"e", "e", int64(len(MAGIC_HEADER) + len1 + len2)},
+		{"f", "f", int64(len(MAGIC_HEADER) + len1 + len2)},
 	}
 
 	for i, test := range tests {
-		if off := s.(*openStream).tails[test.index]; off != test.offset {
+		if off := s.(*openStream).tails[test.index+":"+test.value]; off != test.offset {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.offset, off)
 		}
 	}
@@ -119,26 +120,27 @@ func TestTails(t *testing.T) {
 func TestScan(t *testing.T) {
 	s := createStream()
 
-	s.Write([]byte("abc"), []string{"a", "b", "c"})
-	s.Write([]byte("cde"), []string{"c", "d", "e"})
-	s.Write([]byte("def"), []string{"d", "e", "f"})
+	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
+	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
 	var tests = []struct {
 		index  string
+		value  string
 		events []string
 	}{
-		{"a", []string{"abc"}},
-		{"b", []string{"abc"}},
-		{"c", []string{"cde", "abc"}},
-		{"d", []string{"def", "cde"}},
-		{"e", []string{"def", "cde"}},
-		{"f", []string{"def"}},
+		{"a", "a", []string{"abc"}},
+		{"b", "b", []string{"abc"}},
+		{"c", "c", []string{"cde", "abc"}},
+		{"d", "d", []string{"def", "cde"}},
+		{"e", "e", []string{"def", "cde"}},
+		{"f", "f", []string{"def"}},
 	}
 
 	for i, test := range tests {
 		found := make([]string, 0)
 
-		s.ScanIndex(test.index, func(e *Event) bool {
+		s.ScanIndex(test.index, test.value, func(e *Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
@@ -152,9 +154,9 @@ func TestScan(t *testing.T) {
 func TestIterate(t *testing.T) {
 	s := createStream()
 
-	s.Write([]byte("abc"), []string{"a", "b", "c"})
-	s.Write([]byte("cde"), []string{"c", "d", "e"})
-	s.Write([]byte("def"), []string{"d", "e", "f"})
+	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
+	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
 	found := make([]string, 0)
 
@@ -175,28 +177,29 @@ func TestIterate(t *testing.T) {
 func TestReopenScan(t *testing.T) {
 	s := createStream()
 
-	s.Write([]byte("abc"), []string{"a", "b", "c"})
-	s.Write([]byte("cde"), []string{"c", "d", "e"})
-	s.Write([]byte("def"), []string{"d", "e", "f"})
+	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
+	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
 	s = reopenStream()
 
 	var tests = []struct {
 		index  string
+		value  string
 		events []string
 	}{
-		{"a", []string{"abc"}},
-		{"b", []string{"abc"}},
-		{"c", []string{"cde", "abc"}},
-		{"d", []string{"def", "cde"}},
-		{"e", []string{"def", "cde"}},
-		{"f", []string{"def"}},
+		{"a", "a", []string{"abc"}},
+		{"b", "b", []string{"abc"}},
+		{"c", "c", []string{"cde", "abc"}},
+		{"d", "d", []string{"def", "cde"}},
+		{"e", "e", []string{"def", "cde"}},
+		{"f", "f", []string{"def"}},
 	}
 
 	for i, test := range tests {
 		found := make([]string, 0)
 
-		s.ScanIndex(test.index, func(e *Event) bool {
+		s.ScanIndex(test.index, test.value, func(e *Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
@@ -210,9 +213,9 @@ func TestReopenScan(t *testing.T) {
 func TestReopenIterate(t *testing.T) {
 	s := createStream()
 
-	s.Write([]byte("abc"), []string{"a", "b", "c"})
-	s.Write([]byte("cde"), []string{"c", "d", "e"})
-	s.Write([]byte("def"), []string{"d", "e", "f"})
+	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
+	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
 	s = reopenStream()
 
@@ -231,9 +234,9 @@ func TestReopenIterate(t *testing.T) {
 func TestClose(t *testing.T) {
 	s := createStream()
 
-	s.Write([]byte("abc"), []string{"a", "b", "c"})
-	s.Write([]byte("cde"), []string{"c", "d", "e"})
-	s.Write([]byte("def"), []string{"d", "e", "f"})
+	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
+	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
 	err := s.Close()
 	if err != nil {
@@ -244,26 +247,27 @@ func TestClose(t *testing.T) {
 
 	var tests = []struct {
 		index  string
+		value  string
 		events []string
 	}{
-		{"a", []string{"abc"}},
-		{"b", []string{"abc"}},
-		{"c", []string{"cde", "abc"}},
-		{"d", []string{"def", "cde"}},
-		{"e", []string{"def", "cde"}},
-		{"f", []string{"def"}},
+		{"a", "a", []string{"abc"}},
+		{"b", "b", []string{"abc"}},
+		{"c", "c", []string{"cde", "abc"}},
+		{"d", "d", []string{"def", "cde"}},
+		{"e", "e", []string{"def", "cde"}},
+		{"f", "f", []string{"def"}},
 	}
 
 	for i, test := range tests {
 		found := make([]string, 0)
 		found2 := make([]string, 0)
 
-		s.ScanIndex(test.index, func(e *Event) bool {
+		s.ScanIndex(test.index, test.value, func(e *Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
 
-		s2.ScanIndex(test.index, func(e *Event) bool {
+		s2.ScanIndex(test.index, test.value, func(e *Event) bool {
 			found2 = append(found2, string(e.Data))
 			return true
 		})
@@ -302,17 +306,17 @@ func TestClose(t *testing.T) {
 func TestWritesAfterClose(t *testing.T) {
 	s := createStream()
 
-	_, err := s.Write([]byte("abc"), []string{"a", "b", "c"})
+	_, err := s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
 	if err != nil {
 		t.Errorf("Error found while writing: %v", err)
 	}
 
-	_, err = s.Write([]byte("cde"), []string{"c", "d", "e"})
+	_, err = s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
 	if err != nil {
 		t.Errorf("Error found while writing: %v", err)
 	}
 
-	_, err = s.Write([]byte("def"), []string{"d", "e", "f"})
+	_, err = s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 	if err != nil {
 		t.Errorf("Error found while writing: %v", err)
 	}
@@ -322,7 +326,7 @@ func TestWritesAfterClose(t *testing.T) {
 		t.Errorf("Error found while closing: %v", err)
 	}
 
-	_, err = s.Write([]byte("efg"), []string{"e", "f", "g"})
+	_, err = s.Write([]byte("efg"), map[string]string{"e": "e", "f": "f", "g": "g"})
 	if err == nil {
 		t.Errorf("No error found while writing to closed stream.")
 	}
@@ -331,12 +335,12 @@ func TestWritesAfterClose(t *testing.T) {
 func TestInterleavedReadWrites(t *testing.T) {
 	s := createStream()
 
-	s.Write([]byte("abc"), []string{"a", "b", "c"})
-	s.Write([]byte("cde"), []string{"c", "d", "e"})
+	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
 
 	found := make([]string, 0)
 
-	s.ScanIndex("c", func(e *Event) bool {
+	s.ScanIndex("c", "c", func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
@@ -345,7 +349,7 @@ func TestInterleavedReadWrites(t *testing.T) {
 		t.Errorf("Wanted: %v, found: %v", []string{"cde", "abc"}, found)
 	}
 
-	s.Write([]byte("def"), []string{"d", "e", "f"})
+	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
 	s = reopenStream()
 
@@ -364,9 +368,9 @@ func TestInterleavedReadWrites(t *testing.T) {
 func TestRecoverCorruptedLog(t *testing.T) {
 	s := createStream()
 
-	s.Write([]byte("abc"), []string{"a", "b", "c"})
-	s.Write([]byte("cde"), []string{"c", "d", "e"})
-	s.Write([]byte("def"), []string{"d", "e", "f"})
+	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
+	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
 	// Write some bad data to the end of the log file.
 	s.(*openStream).stream.Write([]byte("rawr!"))
@@ -389,31 +393,31 @@ func TestFailedWrite(t *testing.T) {
 	rws := &RWS{buf: make([]byte, 0)}
 	s, _ := createOpenStream(rws)
 
-	n, err := s.Write([]byte("abc"), []string{"a", "b", "c"})
-	if n != 18 || err != nil {
-		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+	n, err := s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	if n != 24 || err != nil {
+		t.Errorf("Write incorrect results. expected: 24, <nil> found: %v, %v", n, err)
 	}
 
-	n, err = s.Write([]byte("cde"), []string{"c", "d", "e"})
-	if n != 18 || err != nil {
-		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+	n, err = s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
+	if n != 24 || err != nil {
+		t.Errorf("Write incorrect results. expected: 24, <nil> found: %v, %v", n, err)
 	}
 
-	n, err = s.Write([]byte("def"), []string{"d", "e", "f"})
-	if n != 18 || err != nil {
-		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+	n, err = s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
+	if n != 24 || err != nil {
+		t.Errorf("Write incorrect results. expected: 24, <nil> found: %v, %v", n, err)
 	}
 
 	rws.failWrites = true
-	n, err = s.Write([]byte("efg"), []string{"e", "f", "g"})
+	n, err = s.Write([]byte("efg"), map[string]string{"e": "e", "f": "f", "g": "g"})
 	if n != 0 || err == nil {
-		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+		t.Errorf("Write incorrect results. expected: 0, !<nil> found: %v, %v", n, err)
 	}
 	rws.failWrites = false
 
-	n, err = s.Write([]byte("fgh"), []string{"f", "g", "h"})
-	if n != 18 || err != nil {
-		t.Errorf("Write incorrect results. found: %v, %v", n, err)
+	n, err = s.Write([]byte("fgh"), map[string]string{"f": "f", "g": "g", "h": "h"})
+	if n != 24 || err != nil {
+		t.Errorf("Write incorrect results. expected: 24, <nil> found: %v, %v", n, err)
 	}
 
 	found := make([]string, 0)

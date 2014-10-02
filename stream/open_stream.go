@@ -76,7 +76,7 @@ func newOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
 	return s, err
 }
 
-func (s *openStream) Write(data []byte, indexes []string) (int, error) {
+func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) {
 	if s.Closed() {
 		return 0, WRITING_TO_CLOSED_STREAM
 	}
@@ -88,7 +88,9 @@ func (s *openStream) Write(data []byte, indexes []string) (int, error) {
 
 	offsets := make(map[string]int64)
 
-	for _, index := range indexes {
+	for name, value := range indexes {
+		index := name + ":" + value
+
 		if off, ok := s.tails[index]; ok {
 			offsets[index] = off
 		} else {
@@ -110,7 +112,8 @@ func (s *openStream) Write(data []byte, indexes []string) (int, error) {
 		return 0, err
 	}
 
-	for _, index := range indexes {
+	for name, value := range indexes {
+		index := name + ":" + value
 		s.tails[index] = s.offset
 	}
 
@@ -120,40 +123,13 @@ func (s *openStream) Write(data []byte, indexes []string) (int, error) {
 	return written, nil
 }
 
-func (s *openStream) ScanIndex(index string, scanner Scanner) error {
-	off := s.tails[index]
-
-	for off > 0 {
-		s.stream.Seek(off, 0)
-
-		if event, err := pullEvent(s.stream); err == nil {
-			scanner(event)
-			off = event.offsets[index]
-		} else {
-			return err
-		}
-	}
-
-	return nil
+func (s *openStream) ScanIndex(name, value string, scanner Scanner) error {
+	index := name + ":" + value
+	return scanIndex(s.stream, index, s.tails[index], scanner)
 }
 
 func (s *openStream) Iterate(scanner Scanner) error {
-	s.stream.Seek(int64(len(MAGIC_HEADER)), 0)
-
-	var event *Event
-	var err error
-
-	for err == nil {
-		if event, err = pullEvent(s.stream); err == nil {
-			scanner(event)
-		}
-	}
-
-	if err == io.EOF {
-		return nil
-	} else {
-		return err
-	}
+	return iterate(s.stream, scanner)
 }
 
 func (s *openStream) Closed() bool {

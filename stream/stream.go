@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"io"
 	"os"
 
 	"github.com/customerio/esdb/binary"
@@ -17,8 +18,8 @@ var FOOTER_LENGTH = int64(len(MAGIC_FOOTER))
 type Scanner func(*Event) bool
 
 type Stream interface {
-	Write(data []byte, indexes []string) (int, error)
-	ScanIndex(index string, scanner Scanner) error
+	Write(data []byte, indexes map[string]string) (int, error)
+	ScanIndex(index, value string, scanner Scanner) error
 	Iterate(scanner Scanner) error
 	Closed() bool
 	Close() error
@@ -30,15 +31,49 @@ func Open(path string) (Stream, error) {
 		return nil, err
 	}
 
-	// 2 states a stream file can be in:
-	// Open: repopulate indexes into memory, allow additional writes.
-	// Closed: no additional writes allowed, read-only.
 	file.Seek(-FOOTER_LENGTH, 2)
 	footer := binary.ReadBytes(file, FOOTER_LENGTH)
 
+	// 2 states a stream file can be in:
+	// Closed: if footer is present, no additional writes allowed, read-only.
+	// Open:   repopulate indexes into memory, allow additional writes.
 	if string(footer) == string(MAGIC_FOOTER) {
 		return readonly(path)
 	} else {
 		return read(path)
+	}
+}
+
+func scanIndex(stream io.ReadSeeker, index string, offset int64, scanner Scanner) error {
+	for offset > 0 {
+		stream.Seek(offset, 0)
+
+		if event, err := pullEvent(stream); err == nil {
+			scanner(event)
+			offset = event.offsets[index]
+		} else {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func iterate(stream io.ReadSeeker, scanner Scanner) error {
+	stream.Seek(int64(len(MAGIC_HEADER)), 0)
+
+	var event *Event
+	var err error
+
+	for err == nil {
+		if event, err = pullEvent(stream); err == nil {
+			scanner(event)
+		}
+	}
+
+	if err == io.EOF {
+		return nil
+	} else {
+		return err
 	}
 }
