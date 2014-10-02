@@ -149,7 +149,11 @@ func (s *openStream) Iterate(scanner Scanner) error {
 		}
 	}
 
-	return nil
+	if err == io.EOF {
+		return nil
+	} else {
+		return err
+	}
 }
 
 func (s *openStream) Closed() bool {

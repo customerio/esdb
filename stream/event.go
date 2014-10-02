@@ -21,10 +21,10 @@ func newEvent(data []byte, offsets map[string]int64) *Event {
 
 // Events are encoded in the following byte format:
 // [int32:length][bytes(length):data]
-func (e *Event) push(out io.Writer) (int, error) {
+func (e *Event) push(buf *bytes.Buffer) (int, error) {
 	data := e.encode()
-	binary.WriteInt32(out, len(data))
-	out.Write(data)
+	binary.WriteInt32(buf, len(data))
+	buf.Write(data)
 
 	return len(data) + 4, nil
 }
