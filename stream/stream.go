@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	MAGIC_HEADER = "\x65\x73\x64\x62\x73\x74\x72\x65\x61\x6d"
-	MAGIC_FOOTER = "\x63\x6c\x6f\x73\x65\x64\x65\x73\x64\x62\x73\x74\x72\x65\x61\x6d"
+	MAGIC_HEADER = "ESDBstream"
+	MAGIC_FOOTER = "closedESDBstream"
 )
 
 var HEADER_LENGTH = int64(len(MAGIC_HEADER))
@@ -49,8 +49,11 @@ func scanIndex(stream io.ReadSeeker, index string, offset int64, scanner Scanner
 		stream.Seek(offset, 0)
 
 		if event, err := pullEvent(stream); err == nil {
-			scanner(event)
-			offset = event.offsets[index]
+			if scanner(event) {
+				offset = event.offsets[index]
+			} else {
+				offset = 0
+			}
 		} else {
 			return err
 		}

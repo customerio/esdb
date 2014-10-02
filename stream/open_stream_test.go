@@ -135,14 +135,17 @@ func TestOpenScan(t *testing.T) {
 	var tests = []struct {
 		index  string
 		value  string
+		limit  int
 		events []string
 	}{
-		{"a", "a", []string{"abc"}},
-		{"b", "b", []string{"abc"}},
-		{"c", "c", []string{"cde", "abc"}},
-		{"d", "d", []string{"def", "cde"}},
-		{"e", "e", []string{"def", "cde"}},
-		{"f", "f", []string{"def"}},
+		{"a", "a", 100, []string{"abc"}},
+		{"b", "b", 100, []string{"abc"}},
+		{"c", "c", 100, []string{"cde", "abc"}},
+		{"d", "d", 100, []string{"def", "cde"}},
+		{"d", "d", 2, []string{"def", "cde"}},
+		{"d", "d", 1, []string{"def"}},
+		{"e", "e", 100, []string{"def", "cde"}},
+		{"f", "f", 100, []string{"def"}},
 	}
 
 	for i, test := range tests {
@@ -150,7 +153,7 @@ func TestOpenScan(t *testing.T) {
 
 		s.ScanIndex(test.index, test.value, func(e *Event) bool {
 			found = append(found, string(e.Data))
-			return true
+			return len(found) < test.limit
 		})
 
 		if !reflect.DeepEqual(found, test.events) {
