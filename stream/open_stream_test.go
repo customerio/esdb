@@ -90,6 +90,14 @@ func (b *RWS) grow(n int) {
 	}
 }
 
+func TestOpen(t *testing.T) {
+	s := createStream()
+
+	if s.Closed() {
+		t.Errorf("Open stream is not open.")
+	}
+}
+
 func TestTails(t *testing.T) {
 	s := createStream()
 
@@ -253,9 +261,17 @@ func TestClose(t *testing.T) {
 	s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
 	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
+	if s.Closed() {
+		t.Errorf("Open stream is not open.")
+	}
+
 	err := s.Close()
 	if err != nil {
 		t.Errorf("Error found while closing: %v", err)
+	}
+
+	if !s.Closed() {
+		t.Errorf("Closed stream is not closed.")
 	}
 
 	s2 := reopenStream()

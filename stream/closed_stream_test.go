@@ -20,6 +20,14 @@ func buildStream() Stream {
 	return reopenStream()
 }
 
+func TestClosed(t *testing.T) {
+	s := buildStream()
+
+	if !s.Closed() {
+		t.Errorf("Closed stream is not closed.")
+	}
+}
+
 func TestClosedScan(t *testing.T) {
 	s := buildStream()
 
