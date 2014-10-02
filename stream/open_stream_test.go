@@ -117,7 +117,7 @@ func TestTails(t *testing.T) {
 	}
 }
 
-func TestScan(t *testing.T) {
+func TestOpenScan(t *testing.T) {
 	s := createStream()
 
 	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
@@ -151,7 +151,7 @@ func TestScan(t *testing.T) {
 	}
 }
 
-func TestIterate(t *testing.T) {
+func TestOpenIterate(t *testing.T) {
 	s := createStream()
 
 	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
@@ -380,7 +380,7 @@ func TestInterleavedReadWrites(t *testing.T) {
 	}
 }
 
-func TestRecoverCorruptedLog(t *testing.T) {
+func TestRecoverOpenCorruptedLog(t *testing.T) {
 	s := createStream()
 
 	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})

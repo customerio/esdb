@@ -141,6 +141,11 @@ func (s *openStream) Close() (err error) {
 		return
 	}
 
+	_, err = s.stream.Seek(s.offset, 0)
+	if err != nil {
+		return err
+	}
+
 	// Write nil event, to signal end of events.
 	binary.WriteInt32(s.stream, 0)
 
