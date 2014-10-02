@@ -60,14 +60,22 @@ func scanIndex(stream io.ReadSeeker, index string, offset int64, scanner Scanner
 }
 
 func iterate(stream io.ReadSeeker, scanner Scanner) error {
-	stream.Seek(int64(len(MAGIC_HEADER)), 0)
+	stream.Seek(0, 0)
+
+	header := binary.ReadBytes(stream, HEADER_LENGTH)
+
+	if string(header) != string(MAGIC_HEADER) {
+		return CORRUPTED_HEADER
+	}
 
 	var event *Event
 	var err error
 
 	for err == nil {
 		if event, err = pullEvent(stream); err == nil {
-			scanner(event)
+			if !scanner(event) {
+				err = io.EOF
+			}
 		}
 	}
 

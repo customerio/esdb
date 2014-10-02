@@ -67,7 +67,7 @@ func newOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
 		return nil, err
 	}
 
-	tails, offset, length, err := scan(s.stream)
+	tails, offset, length, err := populate(s.stream)
 
 	s.tails = tails
 	s.offset = offset
@@ -183,21 +183,11 @@ func (s *openStream) Close() (err error) {
 	return
 }
 
-func scan(stream io.Reader) (tails map[string]int64, offset int64, length int, err error) {
+func populate(stream io.ReadSeeker) (tails map[string]int64, offset int64, length int, err error) {
 	tails = make(map[string]int64)
+	offset = HEADER_LENGTH
 
-	var event *Event
-
-	header := binary.ReadBytes(stream, int64(len(MAGIC_HEADER)))
-
-	if string(header) != string(MAGIC_HEADER) {
-		err = CORRUPTED_HEADER
-		return
-	}
-
-	offset += int64(len(header))
-
-	for event, err = pullEvent(stream); err == nil; event, err = pullEvent(stream) {
+	err = iterate(stream, func(event *Event) bool {
 		for index, _ := range event.offsets {
 			tails[index] = offset
 		}
@@ -205,11 +195,12 @@ func scan(stream io.Reader) (tails map[string]int64, offset int64, length int, e
 		// set tail for all event indexes
 		offset += int64(event.length())
 		length += 1
-	}
 
-	// If we reached the end of the file, or we
-	// couldn't decode the event, stop populating.
-	if err == io.EOF || err == CORRUPTED_EVENT {
+		return true
+	})
+
+	// If we couldn't decode the last event, it's ok.
+	if err == CORRUPTED_EVENT {
 		err = nil
 	}
 

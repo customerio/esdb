@@ -172,6 +172,21 @@ func TestIterate(t *testing.T) {
 	if !reflect.DeepEqual(found, []string{"abc", "cde", "def"}) {
 		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found)
 	}
+
+	found = make([]string, 0)
+
+	err = s.Iterate(func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return len(found) != 2
+	})
+
+	if err != nil {
+		t.Errorf("Error found while iterating: %v", err)
+	}
+
+	if !reflect.DeepEqual(found, []string{"abc", "cde"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde"}, found)
+	}
 }
 
 func TestReopenScan(t *testing.T) {
