@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/customerio/esdb/binary"
+	"github.com/customerio/esdb/bounded"
 	"github.com/customerio/esdb/sst"
 )
 
@@ -86,5 +87,5 @@ func findIndex(f *os.File) (*sst.Reader, error) {
 	f.Seek(-8, 2)
 	indexLen := binary.ReadInt64(f)
 
-	return sst.NewReader(newBoundReader(f, -8-indexLen, -8), indexLen)
+	return sst.NewReader(bounded.New(f, -8-indexLen, -8), indexLen)
 }

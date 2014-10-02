@@ -7,6 +7,7 @@ import (
 
 	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/blocks"
+	"github.com/customerio/esdb/bounded"
 	"github.com/customerio/esdb/sst"
 )
 
@@ -149,5 +150,5 @@ func findSpaceIndex(r io.ReadSeeker, offset, length int64) (*sst.Reader, error) 
 	r.Seek(footerOffset, 0)
 	indexLen := binary.ReadInt64(r)
 
-	return sst.NewReader(newBoundReader(r, footerOffset-indexLen, footerOffset), indexLen)
+	return sst.NewReader(bounded.New(r, footerOffset-indexLen, footerOffset), indexLen)
 }
