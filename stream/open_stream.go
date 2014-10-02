@@ -5,17 +5,18 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sort"
 
 	"github.com/customerio/esdb/binary"
+	"github.com/customerio/esdb/sst"
 )
 
-const (
-	MAGIC = "\x73\x74\x72\x65\x61\x6d"
-)
+var CORRUPTED_HEADER = errors.New("Incorrect stream file header.")
 
 type openStream struct {
 	stream io.ReadWriteSeeker
 	tails  map[string]int64
+	closed bool
 	offset int64
 	length int
 }
@@ -31,9 +32,7 @@ func New(path string) (Stream, error) {
 	return createOpenStream(file)
 }
 
-// Opens an existing open stream, populates tails,
-// offset, etc from written events.
-func Read(path string) (Stream, error) {
+func read(path string) (Stream, error) {
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
@@ -48,7 +47,7 @@ func createOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
 		return nil, err
 	}
 
-	offset, err := stream.Write([]byte(MAGIC))
+	offset, err := stream.Write([]byte(MAGIC_HEADER))
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +77,15 @@ func newOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
 }
 
 func (s *openStream) Write(data []byte, indexes []string) (int, error) {
+	if s.Closed() {
+		return 0, WRITING_TO_CLOSED_STREAM
+	}
+
+	_, err := s.stream.Seek(s.offset, 0)
+	if err != nil {
+		return 0, err
+	}
+
 	offsets := make(map[string]int64)
 
 	for _, index := range indexes {
@@ -92,14 +100,13 @@ func (s *openStream) Write(data []byte, indexes []string) (int, error) {
 
 	buf := bytes.NewBuffer([]byte{})
 
-	_, err := event.push(buf)
+	_, err = event.push(buf)
 	if err != nil {
 		return 0, err
 	}
 
 	written, err := s.stream.Write(buf.Bytes())
 	if err != nil {
-		s.stream.Seek(s.offset, 0)
 		return 0, err
 	}
 
@@ -131,7 +138,7 @@ func (s *openStream) ScanIndex(index string, scanner Scanner) error {
 }
 
 func (s *openStream) Iterate(scanner Scanner) error {
-	s.stream.Seek(int64(len(MAGIC)), 0)
+	s.stream.Seek(int64(len(MAGIC_HEADER)), 0)
 
 	var event *Event
 	var err error
@@ -146,13 +153,54 @@ func (s *openStream) Iterate(scanner Scanner) error {
 }
 
 func (s *openStream) Closed() bool {
-	return false
+	return s.closed
 }
 
-func (s *openStream) Close() error {
-	// If stream is open, write tails into
-	// an sst table at the end of the file
-	return nil
+func (s *openStream) Close() (err error) {
+	if s.Closed() {
+		return
+	}
+
+	// Write nil event, to signal end of events.
+	binary.WriteInt32(s.stream, 0)
+
+	indexes := make(sort.StringSlice, 0, len(s.tails))
+
+	for name, _ := range s.tails {
+		indexes = append(indexes, name)
+	}
+
+	sort.Stable(indexes)
+
+	buf := new(bytes.Buffer)
+	st := sst.NewWriter(buf)
+
+	// For each grouping or index, we index the section's
+	// byte offset in the file and the length in bytes
+	// of all data in the grouping/index.
+	for _, name := range indexes {
+		buf := new(bytes.Buffer)
+
+		binary.WriteUvarint64(buf, s.tails[name])
+
+		if err = st.Set([]byte(name), buf.Bytes()); err != nil {
+			return
+		}
+	}
+
+	if err = st.Close(); err != nil {
+		return
+	}
+
+	binary.WriteInt64(buf, int64(len(buf.Bytes())))
+	buf.Write([]byte(MAGIC_FOOTER))
+
+	_, err = buf.WriteTo(s.stream)
+	if err == nil {
+		s.closed = true
+	}
+
+	return
 }
 
 func scan(stream io.Reader) (tails map[string]int64, offset int64, length int, err error) {
@@ -160,10 +208,10 @@ func scan(stream io.Reader) (tails map[string]int64, offset int64, length int, e
 
 	var event *Event
 
-	header := binary.ReadBytes(stream, int64(len(MAGIC)))
+	header := binary.ReadBytes(stream, int64(len(MAGIC_HEADER)))
 
-	if string(header) != string(MAGIC) {
-		err = errors.New("Incorrect stream file header.")
+	if string(header) != string(MAGIC_HEADER) {
+		err = CORRUPTED_HEADER
 		return
 	}
 

@@ -2,7 +2,17 @@ package stream
 
 import (
 	"os"
+
+	"github.com/customerio/esdb/binary"
 )
+
+const (
+	MAGIC_HEADER = "\x65\x73\x64\x62\x73\x74\x72\x65\x61\x6d"
+	MAGIC_FOOTER = "\x63\x6c\x6f\x73\x65\x64\x65\x73\x64\x62\x73\x74\x72\x65\x61\x6d"
+)
+
+var HEADER_LENGTH = int64(len(MAGIC_HEADER))
+var FOOTER_LENGTH = int64(len(MAGIC_FOOTER))
 
 type Scanner func(*Event) bool
 
@@ -15,7 +25,7 @@ type Stream interface {
 }
 
 func Open(path string) (Stream, error) {
-	_, err := os.Open(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -23,11 +33,12 @@ func Open(path string) (Stream, error) {
 	// 2 states a stream file can be in:
 	// Open: repopulate indexes into memory, allow additional writes.
 	// Closed: no additional writes allowed, read-only.
-	closed := false
+	file.Seek(-FOOTER_LENGTH, 2)
+	footer := binary.ReadBytes(file, FOOTER_LENGTH)
 
-	if closed {
-		return Readonly(path)
+	if string(footer) == string(MAGIC_FOOTER) {
+		return readonly(path)
 	} else {
-		return Read(path)
+		return read(path)
 	}
 }

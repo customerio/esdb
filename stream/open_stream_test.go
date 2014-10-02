@@ -26,7 +26,7 @@ func newStream() Stream {
 }
 
 func reopenStream() Stream {
-	s, err := Read("tmp/test.stream")
+	s, err := Open("tmp/test.stream")
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
@@ -101,12 +101,12 @@ func TestTails(t *testing.T) {
 		index  string
 		offset int64
 	}{
-		{"a", int64(len(MAGIC))},
-		{"b", int64(len(MAGIC))},
-		{"c", int64(len(MAGIC) + len1)},
-		{"d", int64(len(MAGIC) + len1 + len2)},
-		{"e", int64(len(MAGIC) + len1 + len2)},
-		{"f", int64(len(MAGIC) + len1 + len2)},
+		{"a", int64(len(MAGIC_HEADER))},
+		{"b", int64(len(MAGIC_HEADER))},
+		{"c", int64(len(MAGIC_HEADER) + len1)},
+		{"d", int64(len(MAGIC_HEADER) + len1 + len2)},
+		{"e", int64(len(MAGIC_HEADER) + len1 + len2)},
+		{"f", int64(len(MAGIC_HEADER) + len1 + len2)},
 	}
 
 	for i, test := range tests {
@@ -224,6 +224,139 @@ func TestReopenIterate(t *testing.T) {
 	}
 }
 
+func TestClose(t *testing.T) {
+	s := createStream()
+
+	s.Write([]byte("abc"), []string{"a", "b", "c"})
+	s.Write([]byte("cde"), []string{"c", "d", "e"})
+	s.Write([]byte("def"), []string{"d", "e", "f"})
+
+	err := s.Close()
+	if err != nil {
+		t.Errorf("Error found while closing: %v", err)
+	}
+
+	s2 := reopenStream()
+
+	var tests = []struct {
+		index  string
+		events []string
+	}{
+		{"a", []string{"abc"}},
+		{"b", []string{"abc"}},
+		{"c", []string{"cde", "abc"}},
+		{"d", []string{"def", "cde"}},
+		{"e", []string{"def", "cde"}},
+		{"f", []string{"def"}},
+	}
+
+	for i, test := range tests {
+		found := make([]string, 0)
+		found2 := make([]string, 0)
+
+		s.ScanIndex(test.index, func(e *Event) bool {
+			found = append(found, string(e.Data))
+			return true
+		})
+
+		s2.ScanIndex(test.index, func(e *Event) bool {
+			found2 = append(found2, string(e.Data))
+			return true
+		})
+
+		if !reflect.DeepEqual(found, test.events) {
+			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.events, found)
+		}
+
+		if !reflect.DeepEqual(found2, test.events) {
+			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.events, found2)
+		}
+	}
+
+	found := make([]string, 0)
+	found2 := make([]string, 0)
+
+	s.Iterate(func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return true
+	})
+
+	s2.Iterate(func(e *Event) bool {
+		found2 = append(found2, string(e.Data))
+		return true
+	})
+
+	if !reflect.DeepEqual(found, []string{"abc", "cde", "def"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found)
+	}
+
+	if !reflect.DeepEqual(found2, []string{"abc", "cde", "def"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found2)
+	}
+}
+
+func TestWritesAfterClose(t *testing.T) {
+	s := createStream()
+
+	_, err := s.Write([]byte("abc"), []string{"a", "b", "c"})
+	if err != nil {
+		t.Errorf("Error found while writing: %v", err)
+	}
+
+	_, err = s.Write([]byte("cde"), []string{"c", "d", "e"})
+	if err != nil {
+		t.Errorf("Error found while writing: %v", err)
+	}
+
+	_, err = s.Write([]byte("def"), []string{"d", "e", "f"})
+	if err != nil {
+		t.Errorf("Error found while writing: %v", err)
+	}
+
+	err = s.Close()
+	if err != nil {
+		t.Errorf("Error found while closing: %v", err)
+	}
+
+	_, err = s.Write([]byte("efg"), []string{"e", "f", "g"})
+	if err == nil {
+		t.Errorf("No error found while writing to closed stream.")
+	}
+}
+
+func TestInterleavedReadWrites(t *testing.T) {
+	s := createStream()
+
+	s.Write([]byte("abc"), []string{"a", "b", "c"})
+	s.Write([]byte("cde"), []string{"c", "d", "e"})
+
+	found := make([]string, 0)
+
+	s.ScanIndex("c", func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return true
+	})
+
+	if !reflect.DeepEqual(found, []string{"cde", "abc"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"cde", "abc"}, found)
+	}
+
+	s.Write([]byte("def"), []string{"d", "e", "f"})
+
+	s = reopenStream()
+
+	found = make([]string, 0)
+
+	s.Iterate(func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return true
+	})
+
+	if !reflect.DeepEqual(found, []string{"abc", "cde", "def"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found)
+	}
+}
+
 func TestRecoverCorruptedLog(t *testing.T) {
 	s := createStream()
 
@@ -294,7 +427,7 @@ func TestFailedWrite(t *testing.T) {
 	// and see if we can open it and read past the
 	// failed write.
 	log := createStream()
-	n, err = log.(*openStream).stream.Write(rws.buf[6:])
+	n, err = log.(*openStream).stream.Write(rws.buf[len(MAGIC_HEADER):])
 	err = log.(*openStream).stream.(io.Closer).Close()
 
 	s = reopenStream()
@@ -310,6 +443,3 @@ func TestFailedWrite(t *testing.T) {
 		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def", "fgh"}, found)
 	}
 }
-
-// TODO test closing stream
-// TODO test error when writing to closed stream

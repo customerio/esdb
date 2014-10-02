@@ -1,50 +1,83 @@
 package stream
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
 
+	"github.com/customerio/esdb/binary"
+	"github.com/customerio/esdb/bounded"
 	"github.com/customerio/esdb/sst"
 )
 
+var WRITING_TO_CLOSED_STREAM = errors.New("stream has been closed")
+
 type closedStream struct {
-	file  io.ReadSeeker
-	index *sst.Reader
+	stream io.ReadSeeker
+	index  *sst.Reader
 }
 
-func Readonly(path string) (Stream, error) {
+func readonly(path string) (Stream, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 
-	index, err := findIndex(file)
+	return newClosedStream(file)
+}
+
+func newClosedStream(stream io.ReadSeeker) (Stream, error) {
+	index, err := findIndex(stream)
 	if err != nil {
 		return nil, err
 	}
 
 	return &closedStream{
-		file:  file,
-		index: index,
+		stream: stream,
+		index:  index,
 	}, nil
 }
 
 func (s *closedStream) Write(data []byte, indexes []string) (int, error) {
-	return 0, errors.New("stream already closed")
+	return 0, WRITING_TO_CLOSED_STREAM
 }
 
 func (s *closedStream) ScanIndex(index string, scanner Scanner) error {
-	// starts at the offset stored in the sst index
-	// reads event and sends it to scanner
-	// while event has a previous offset
-	//   read event at previous offset
-	//   send to scanner
+	val, err := s.index.Get([]byte(index))
+	if err != nil {
+		return err
+	}
+
+	b := bytes.NewReader(val)
+	off := binary.ReadUvarint(b)
+
+	for off > 0 {
+		s.stream.Seek(off, 0)
+
+		if event, err := pullEvent(s.stream); err == nil {
+			scanner(event)
+			off = event.offsets[index]
+		} else {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (s *closedStream) Iterate(scanner Scanner) error {
-	// Reads all events from file
+	s.stream.Seek(int64(len(MAGIC_HEADER)), 0)
+
+	var event *Event
+	var err error
+
+	for err == nil {
+		if event, err = pullEvent(s.stream); err == nil {
+			scanner(event)
+		}
+	}
+
 	return nil
 }
 
@@ -53,17 +86,14 @@ func (s *closedStream) Closed() bool {
 }
 
 func (s *closedStream) Close() error {
-	// If stream is open, write tails into
-	// an sst table at the end of the file
-	return errors.New("stream already closed")
+	return nil
 }
 
 func findIndex(f io.ReadSeeker) (*sst.Reader, error) {
-	//// The last 8 bytes in the file is the length
-	//// of the SSTable spaces index.
-	//f.Seek(-8, 2)
-	//indexLen := binary.ReadInt64(f)
+	// The last 8 bytes in the file is the length
+	// of the SSTable spaces index.
+	f.Seek(-FOOTER_LENGTH-8, 2)
+	indexLen := binary.ReadInt64(f)
 
-	//return sst.NewReader(newBoundReader(f, -8-indexLen, -8), indexLen)
-	return nil, nil
+	return sst.NewReader(bounded.New(f, -8-FOOTER_LENGTH-indexLen, -8-FOOTER_LENGTH), indexLen)
 }
