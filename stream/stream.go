@@ -19,7 +19,7 @@ type Scanner func(*Event) bool
 
 type Stream interface {
 	Write(data []byte, indexes map[string]string) (int, error)
-	ScanIndex(index, value string, scanner Scanner) error
+	ScanIndex(name, value string, scanner Scanner) error
 	Iterate(scanner Scanner) error
 	Closed() bool
 	Close() error
