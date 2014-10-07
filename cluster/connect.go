@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/rpc"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -31,13 +31,17 @@ func Connect(n *Node, existing string) error {
 }
 
 func initRaft(n *Node) (raft.Server, error) {
+	raft.RegisterCommand(&EventCommand{})
+
 	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
 
-	if err := os.MkdirAll(n.path+"/db", 0744); err != nil {
-		log.Fatalf("Unable to create db directory: %v", err)
+	if err := os.MkdirAll(filepath.Join(n.path, "stream"), 0744); err != nil {
+		log.Fatalf("Unable to create stream directory: %v", err)
 	}
 
-	s, err := raft.NewServer(n.name, n.path, transporter, nil, nil, "")
+	n.db = NewDb(filepath.Join(n.path, "stream"))
+
+	s, err := raft.NewServer(n.name, n.path, transporter, nil, n.db, "")
 	if err != nil {
 		return nil, err
 	}
@@ -54,19 +58,10 @@ func joinCluster(n *Node, existing string) error {
 		return errors.New("Cannot join with an existing log")
 	}
 
-	client, err := rpc.DialHTTP("tcp", existing)
-	if err != nil {
-		return err
-	}
-
-	defer client.Close()
-
-	command := raft.DefaultJoinCommand{
+	return executeOn(existing, "Node.JoinCluster", &raft.DefaultJoinCommand{
 		Name:             n.raft.Name(),
 		ConnectionString: fmt.Sprintf("http://%s:%d", n.host, n.port),
-	}
-
-	return client.Call("Node.Join", command, &NoResponse{})
+	}, &NoResponse{})
 }
 
 func createCluster(n *Node) error {

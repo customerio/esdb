@@ -1,8 +1,6 @@
 package cluster
 
 import (
-	"github.com/goraft/raft"
-
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -11,9 +9,7 @@ import (
 func (n *Node) clusterRemoveHandler(w http.ResponseWriter, req *http.Request) {
 	name := strings.Replace(req.URL.Path, "/cluster/remove/", "", 1)
 
-	err := executeOnLeader(n, "Node.Remove", &raft.DefaultLeaveCommand{
-		Name: name,
-	}, &NoResponse{})
+	err := n.RemoveFromCluster(name)
 
 	body := make(map[string]interface{})
 

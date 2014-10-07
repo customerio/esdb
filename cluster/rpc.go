@@ -23,12 +23,16 @@ func (n *NodeRPC) State(args NoArgs, reply *NodeState) error {
 	return nil
 }
 
-func (n *NodeRPC) Join(command raft.DefaultJoinCommand, reply *NoResponse) error {
-	return executeOnLeader(n.node, "Node.Join", &command, &NoResponse{})
+func (n *NodeRPC) JoinCluster(command raft.DefaultJoinCommand, reply *NoResponse) error {
+	return executeOnLeader(n.node, "Node.JoinCluster", &command, &NoResponse{})
 }
 
-func (n *NodeRPC) Remove(command raft.DefaultLeaveCommand, reply *NoResponse) error {
-	return executeOnLeader(n.node, "Node.Remove", &command, &NoResponse{})
+func (n *NodeRPC) RemoveFromCluster(command raft.DefaultLeaveCommand, reply *NoResponse) error {
+	return executeOnLeader(n.node, "Node.RemoveFromCluster", &command, &NoResponse{})
+}
+
+func (n *NodeRPC) Event(command *EventCommand, reply *NoResponse) error {
+	return executeOnLeader(n.node, "Node.Event", command, &NoResponse{})
 }
 
 func executeOnLeader(n *Node, message string, command raft.Command, reply interface{}) error {
@@ -40,17 +44,20 @@ func executeOnLeader(n *Node, message string, command raft.Command, reply interf
 
 		if node, ok := n.raft.Peers()[leader]; ok {
 			host := strings.Replace(node.ConnectionString, "http://", "", 1)
-
-			client, err := rpc.DialHTTP("tcp", host)
-			if err != nil {
-				return err
-			}
-
-			defer client.Close()
-
-			return client.Call(message, command, reply)
+			return executeOn(host, message, command, reply)
 		} else {
 			return errors.New("No current leader.")
 		}
 	}
+}
+
+func executeOn(host string, message string, command raft.Command, reply interface{}) error {
+	client, err := rpc.DialHTTP("tcp", host)
+	if err != nil {
+		return err
+	}
+
+	defer client.Close()
+
+	return client.Call(message, command, reply)
 }

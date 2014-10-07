@@ -16,6 +16,7 @@ type Node struct {
 	host string
 	port int
 	path string
+	db   *DB
 	raft raft.Server
 }
 
@@ -57,6 +58,18 @@ func (n *Node) Start(join string) (err error) {
 	log.Println("Initializing HTTP server")
 
 	return RestServer(n)
+}
+
+func (n *Node) Event(body []byte, indexes map[string]string) error {
+	rpc := &NodeRPC{n}
+	return rpc.Event(NewEventCommand(body, indexes), &NoResponse{})
+}
+
+func (n *Node) RemoveFromCluster(name string) error {
+	rpc := &NodeRPC{n}
+	return rpc.RemoveFromCluster(raft.DefaultLeaveCommand{
+		Name: name,
+	}, &NoResponse{})
 }
 
 func (n *Node) State() NodeState {
