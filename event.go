@@ -3,6 +3,7 @@ package esdb
 import (
 	"io"
 
+	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/blocks"
 )
 
@@ -26,16 +27,16 @@ func newEvent(data []byte, timestamp int) *Event {
 // Events are encoded in the following byte format:
 // [Uvarint:length][int32:timestamp][bytes(length):data]
 func (e *Event) push(out io.Writer) {
-	writeUvarint(out, len(e.Data))
-	writeInt32(out, e.Timestamp)
+	binary.WriteUvarint(out, len(e.Data))
+	binary.WriteInt32(out, e.Timestamp)
 	out.Write(e.Data)
 	e.Data = nil
 }
 
 func pullEvent(r *blocks.Reader) (e *Event) {
-	size := readUvarint(r)
-	timestamp := int(readInt32(r))
-	data := readBytes(r, size)
+	size := binary.ReadUvarint(r)
+	timestamp := int(binary.ReadInt32(r))
+	data := binary.ReadBytes(r, size)
 
 	if len(data) > 0 {
 		e = &Event{Data: data, Timestamp: timestamp}

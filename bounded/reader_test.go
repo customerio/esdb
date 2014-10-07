@@ -1,4 +1,4 @@
-package esdb
+package bounded
 
 import (
 	"bytes"
@@ -28,7 +28,7 @@ func TestBoundRead(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		reader := newBoundReader(bytes.NewReader(contents), test.offset, test.offset+test.length)
+		reader := New(bytes.NewReader(contents), test.offset, test.offset+test.length)
 
 		data := make([]byte, test.read)
 		n, _ := reader.Read(data)
@@ -67,7 +67,7 @@ func TestBoundSeek(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		reader := newBoundReader(bytes.NewReader(contents), test.offset, test.offset+test.length)
+		reader := New(bytes.NewReader(contents), test.offset, test.offset+test.length)
 
 		if test.seek < 0 {
 			reader.Seek(test.seek, 2)

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/blocks"
 	"github.com/dgryski/go-csnappy"
 )
@@ -48,8 +49,8 @@ func TestWriteIndexBlocksSmall(t *testing.T) {
 	reader := blocks.NewByteReader(w.Bytes(), 4096)
 
 	for i, event := range index.evs {
-		block := readInt64(reader)
-		offset := readInt16(reader)
+		block := binary.ReadInt64(reader)
+		offset := binary.ReadInt16(reader)
 
 		if event.block != block || event.offset != int(offset) {
 			t.Errorf("Case %d: Wrong read event block/offset. wanted: %d,%d found: %d,%d", i, event.block, event.offset, block, offset)
@@ -75,8 +76,8 @@ func TestWriteIndexBlocksMedium(t *testing.T) {
 	reader := blocks.NewByteReader(w.Bytes(), 4096)
 
 	for i, event := range index.evs {
-		block := readInt64(reader)
-		offset := readInt16(reader)
+		block := binary.ReadInt64(reader)
+		offset := binary.ReadInt16(reader)
 
 		if event.block != block || event.offset != int(offset) {
 			t.Errorf("Case %d: Wrong read event block/offset. wanted: %d,%d found: %d,%d", i, event.block, event.offset, block, offset)
@@ -102,8 +103,8 @@ func TestWriteIndexBlocksLarge(t *testing.T) {
 	reader := blocks.NewByteReader(w.Bytes(), 4096)
 
 	for i, event := range index.evs {
-		block := readInt64(reader)
-		offset := readInt16(reader)
+		block := binary.ReadInt64(reader)
+		offset := binary.ReadInt16(reader)
 
 		if event.block != block || event.offset != int(offset) {
 			t.Errorf("Case %d: Wrong read event block/offset. wanted: %d,%d found: %d,%d", i, event.block, event.offset, block, offset)

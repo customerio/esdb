@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/blocks"
 )
 
@@ -57,8 +58,8 @@ func TestWriteSpaceGrouping(t *testing.T) {
 		val, _ := sst.Get([]byte(test.key))
 		r := bytes.NewReader(val)
 
-		offset := readUvarint(r)
-		length := readUvarint(r)
+		offset := binary.ReadUvarint(r)
+		length := binary.ReadUvarint(r)
 
 		if int(offset) != test.offset || int(length) != test.length {
 			t.Errorf("Case %d: Wrong grouping encoding: want: %d,%d found: %d,%d", i, test.offset, test.length, offset, length)
@@ -131,8 +132,8 @@ func TestWriteSpaceIndexes(t *testing.T) {
 
 		r := bytes.NewReader(val)
 
-		offset := readUvarint(r)
-		length := readUvarint(r)
+		offset := binary.ReadUvarint(r)
+		length := binary.ReadUvarint(r)
 
 		if int(offset) != test.offset || int(length) != test.length {
 			t.Errorf("Case %d: Wrong grouping encoding: want: %d,%d found: %d,%d", i, test.offset, test.length, offset, length)
@@ -154,8 +155,8 @@ func TestWriteSpaceIndexes(t *testing.T) {
 		}
 
 		for j, event := range test.indexed {
-			block := readInt64(reader)
-			offset := readInt16(reader)
+			block := binary.ReadInt64(reader)
+			offset := binary.ReadInt16(reader)
 
 			if block != event.block || int(offset) != event.offset {
 				t.Errorf("Case %d/%d: Wrong event index: want: %d,%d found: %d,%d", i, j, event.block, event.offset, block, offset)

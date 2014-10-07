@@ -1,13 +1,13 @@
-package esdb
+package bounded
 
 import (
 	"io"
 )
 
-// boundReaders implement io.Reader and io.Seeker, while
+// Implements io.Reader and io.Seeker, while
 // bounding both reads and seeks to the range defined
 // by the provided start and stop offsets.
-type boundReader struct {
+type Reader struct {
 	reader  io.ReadSeeker
 	start   int64
 	stop    int64
@@ -15,7 +15,7 @@ type boundReader struct {
 	whence  int
 }
 
-func newBoundReader(reader io.ReadSeeker, start, stop int64) io.ReadSeeker {
+func New(reader io.ReadSeeker, start, stop int64) io.ReadSeeker {
 	var whence int
 
 	if start < 0 {
@@ -26,7 +26,7 @@ func newBoundReader(reader io.ReadSeeker, start, stop int64) io.ReadSeeker {
 		reader.Seek(start, 0)
 	}
 
-	return &boundReader{
+	return &Reader{
 		reader,
 		start,
 		stop,
@@ -35,7 +35,7 @@ func newBoundReader(reader io.ReadSeeker, start, stop int64) io.ReadSeeker {
 	}
 }
 
-func (r *boundReader) Read(p []byte) (n int, err error) {
+func (r *Reader) Read(p []byte) (n int, err error) {
 	n, err = r.reader.Read(p)
 	r.current += int64(n)
 
@@ -52,7 +52,7 @@ func (r *boundReader) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (r *boundReader) Seek(offset int64, whence int) (n int64, err error) {
+func (r *Reader) Seek(offset int64, whence int) (n int64, err error) {
 	if whence == 0 {
 		offset = r.start + offset
 	} else if whence == 1 {

@@ -4,6 +4,7 @@ import (
 	"io"
 	"sort"
 
+	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/blocks"
 )
 
@@ -21,8 +22,8 @@ func writeIndexBlocks(i *index, out io.Writer) {
 		// Each entry in the index is
 		// the block the event is located in,
 		// and the offset within the block.
-		writeInt64(writer, event.block)
-		writeInt16(writer, event.offset)
+		binary.WriteInt64(writer, event.block)
+		binary.WriteInt16(writer, event.offset)
 	}
 
 	// Mark the end of the grouping's events with an empty event.
