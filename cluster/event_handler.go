@@ -64,9 +64,11 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 
 func scan(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interface{}, error) {
 	var count int
+	var err error
 
 	index := req.FormValue("index")
 	value := req.FormValue("value")
+	offset, _ := strconv.ParseInt(req.FormValue("continuation"), 10, 64)
 	limit, _ := strconv.Atoi(req.FormValue("limit"))
 
 	events := make([]string, 0, limit)
@@ -76,20 +78,28 @@ func scan(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interfa
 	}
 
 	if index != "" {
-		n.db.stream.ScanIndex(index, value, func(e *stream.Event) bool {
+		err = n.db.stream.ScanIndex(index, value, offset, func(e *stream.Event) bool {
 			count += 1
 			events = append(events, string(e.Data))
+			offset = e.Next(index, value)
 			return count < limit
 		})
 	} else {
-		n.db.stream.Iterate(func(e *stream.Event) bool {
+		offset, err = n.db.stream.Iterate(offset, func(e *stream.Event) bool {
 			count += 1
 			events = append(events, string(e.Data))
 			return count < limit
 		})
 	}
 
+	var continuation string
+
+	if offset > 0 {
+		continuation = strconv.FormatInt(offset, 10)
+	}
+
 	return map[string]interface{}{
-		"events": events,
-	}, nil
+		"events":       events,
+		"continuation": continuation,
+	}, err
 }
