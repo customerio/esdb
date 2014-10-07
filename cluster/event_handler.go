@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 )
 
 type event struct {
-	Body    interface{}       `json:"body"`
+	Body    string            `json:"body"`
 	Indexes map[string]string `json:"indexes"`
 }
 
@@ -46,8 +47,7 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 	}
 
 	if err == nil {
-		b, _ := json.Marshal(data.Body)
-		err = n.Event(b, data.Indexes)
+		err = n.Event([]byte(data.Body), data.Indexes)
 	} else {
 		w.WriteHeader(500)
 	}
@@ -63,12 +63,31 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 }
 
 func scan(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interface{}, error) {
-	events := make([]string, 0)
+	var count int
 
-	n.db.stream.Iterate(func(e *stream.Event) bool {
-		events = append(events, string(e.Data))
-		return true
-	})
+	index := req.FormValue("index")
+	value := req.FormValue("value")
+	limit, _ := strconv.Atoi(req.FormValue("limit"))
+
+	events := make([]string, 0, limit)
+
+	if limit == 0 {
+		limit = 20
+	}
+
+	if index != "" {
+		n.db.stream.ScanIndex(index, value, func(e *stream.Event) bool {
+			count += 1
+			events = append(events, string(e.Data))
+			return count < limit
+		})
+	} else {
+		n.db.stream.Iterate(func(e *stream.Event) bool {
+			count += 1
+			events = append(events, string(e.Data))
+			return count < limit
+		})
+	}
 
 	return map[string]interface{}{
 		"events": events,
