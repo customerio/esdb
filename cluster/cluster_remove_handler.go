@@ -22,4 +22,5 @@ func (n *Node) clusterRemoveHandler(w http.ResponseWriter, req *http.Request) {
 
 	js, _ := json.MarshalIndent(body, "", "  ")
 	w.Write(js)
+	w.Write([]byte("\n"))
 }

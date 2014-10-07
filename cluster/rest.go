@@ -15,7 +15,6 @@ func RestServer(n *Node) error {
 	n.HandleFunc("/cluster/remove/", n.clusterRemoveHandler)
 
 	n.HandleFunc("/events", n.eventHandler)
-	//n.HandleFunc("/scan/", n.indexHandler)
 
 	log.Println("Listening at:", fmt.Sprintf("http://%s:%d", n.host, n.port))
 
