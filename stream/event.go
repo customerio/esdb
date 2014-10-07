@@ -19,6 +19,10 @@ func newEvent(data []byte, offsets map[string]int64) *Event {
 	return &Event{Data: data, offsets: offsets}
 }
 
+func (e *Event) Next(name, value string) int64 {
+	return e.offsets[name+":"+value]
+}
+
 // Events are encoded in the following byte format:
 // [int32:length][bytes(length):data]
 func (e *Event) push(buf *bytes.Buffer) (int, error) {

@@ -19,8 +19,8 @@ type Scanner func(*Event) bool
 
 type Stream interface {
 	Write(data []byte, indexes map[string]string) (int, error)
-	ScanIndex(name, value string, scanner Scanner) error
-	Iterate(scanner Scanner) error
+	ScanIndex(name, value string, offset int64, scanner Scanner) error
+	Iterate(offset int64, scanner Scanner) (int64, error)
 	Closed() bool
 	Close() error
 }
@@ -62,13 +62,19 @@ func scanIndex(stream io.ReadSeeker, index string, offset int64, scanner Scanner
 	return nil
 }
 
-func iterate(stream io.ReadSeeker, scanner Scanner) error {
-	stream.Seek(0, 0)
+func iterate(stream io.ReadSeeker, offset int64, scanner Scanner) (int64, error) {
+	if offset <= 0 {
+		stream.Seek(0, 0)
 
-	header := binary.ReadBytes(stream, HEADER_LENGTH)
+		header := binary.ReadBytes(stream, HEADER_LENGTH)
 
-	if string(header) != string(MAGIC_HEADER) {
-		return CORRUPTED_HEADER
+		if string(header) != string(MAGIC_HEADER) {
+			return 0, CORRUPTED_HEADER
+		}
+
+		offset += HEADER_LENGTH
+	} else {
+		stream.Seek(offset, 0)
 	}
 
 	var event *Event
@@ -76,6 +82,8 @@ func iterate(stream io.ReadSeeker, scanner Scanner) error {
 
 	for err == nil {
 		if event, err = pullEvent(stream); err == nil {
+			offset += int64(event.length())
+
 			if !scanner(event) {
 				err = io.EOF
 			}
@@ -83,8 +91,8 @@ func iterate(stream io.ReadSeeker, scanner Scanner) error {
 	}
 
 	if err == io.EOF {
-		return nil
+		return offset, nil
 	} else {
-		return err
+		return offset, err
 	}
 }

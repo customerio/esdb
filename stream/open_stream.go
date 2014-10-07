@@ -123,13 +123,18 @@ func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) 
 	return written, nil
 }
 
-func (s *openStream) ScanIndex(name, value string, scanner Scanner) error {
+func (s *openStream) ScanIndex(name, value string, offset int64, scanner Scanner) error {
 	index := name + ":" + value
-	return scanIndex(s.stream, index, s.tails[index], scanner)
+
+	if offset <= 0 {
+		offset = s.tails[index]
+	}
+
+	return scanIndex(s.stream, index, offset, scanner)
 }
 
-func (s *openStream) Iterate(scanner Scanner) error {
-	return iterate(s.stream, scanner)
+func (s *openStream) Iterate(offset int64, scanner Scanner) (int64, error) {
+	return iterate(s.stream, offset, scanner)
 }
 
 func (s *openStream) Closed() bool {
@@ -192,7 +197,7 @@ func populate(stream io.ReadSeeker) (tails map[string]int64, offset int64, lengt
 	tails = make(map[string]int64)
 	offset = HEADER_LENGTH
 
-	err = iterate(stream, func(event *Event) bool {
+	_, err = iterate(stream, 0, func(event *Event) bool {
 		for index, _ := range event.offsets {
 			tails[index] = offset
 		}

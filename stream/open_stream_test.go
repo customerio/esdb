@@ -151,7 +151,7 @@ func TestOpenScan(t *testing.T) {
 	for i, test := range tests {
 		found := make([]string, 0)
 
-		s.ScanIndex(test.index, test.value, func(e *Event) bool {
+		s.ScanIndex(test.index, test.value, 0, func(e *Event) bool {
 			found = append(found, string(e.Data))
 			return len(found) < test.limit
 		})
@@ -159,6 +159,41 @@ func TestOpenScan(t *testing.T) {
 		if !reflect.DeepEqual(found, test.events) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.events, found)
 		}
+	}
+}
+
+func TestContinueScan(t *testing.T) {
+	s := createStream()
+
+	s.Write([]byte("abc"), map[string]string{"a": "a"})
+	s.Write([]byte("cde"), map[string]string{"a": "a"})
+	s.Write([]byte("def"), map[string]string{"a": "a"})
+
+	var offset int64
+	found := make([]string, 0)
+
+	s.ScanIndex("a", "a", offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		offset = e.Next("a", "a")
+		return false
+	})
+	s.ScanIndex("a", "a", offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		offset = e.Next("a", "a")
+		return false
+	})
+	s.ScanIndex("a", "a", offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		offset = e.Next("a", "a")
+		return false
+	})
+
+	if offset != 0 {
+		t.Errorf("Wanted offset: 0, found: %v", offset)
+	}
+
+	if !reflect.DeepEqual(found, []string{"def", "cde", "abc"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"def", "cde", "abc"}, found)
 	}
 }
 
@@ -171,7 +206,7 @@ func TestOpenIterate(t *testing.T) {
 
 	found := make([]string, 0)
 
-	err := s.Iterate(func(e *Event) bool {
+	_, err := s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
@@ -186,7 +221,7 @@ func TestOpenIterate(t *testing.T) {
 
 	found = make([]string, 0)
 
-	err = s.Iterate(func(e *Event) bool {
+	_, err = s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return len(found) != 2
 	})
@@ -197,6 +232,38 @@ func TestOpenIterate(t *testing.T) {
 
 	if !reflect.DeepEqual(found, []string{"abc", "cde"}) {
 		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde"}, found)
+	}
+}
+
+func TestContinueIterate(t *testing.T) {
+	s := createStream()
+
+	s.Write([]byte("abc"), map[string]string{"a": "a"})
+	s.Write([]byte("cde"), map[string]string{"a": "a"})
+	s.Write([]byte("def"), map[string]string{"a": "a"})
+
+	var offset int64
+	found := make([]string, 0)
+
+	offset, _ = s.Iterate(offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return false
+	})
+	offset, _ = s.Iterate(offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return false
+	})
+	offset, _ = s.Iterate(offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return false
+	})
+	offset, _ = s.Iterate(offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return false
+	})
+
+	if !reflect.DeepEqual(found, []string{"abc", "cde", "def"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found)
 	}
 }
 
@@ -225,7 +292,7 @@ func TestReopenScan(t *testing.T) {
 	for i, test := range tests {
 		found := make([]string, 0)
 
-		s.ScanIndex(test.index, test.value, func(e *Event) bool {
+		s.ScanIndex(test.index, test.value, 0, func(e *Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
@@ -247,7 +314,7 @@ func TestReopenIterate(t *testing.T) {
 
 	found := make([]string, 0)
 
-	s.Iterate(func(e *Event) bool {
+	s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
@@ -296,12 +363,12 @@ func TestClose(t *testing.T) {
 		found := make([]string, 0)
 		found2 := make([]string, 0)
 
-		s.ScanIndex(test.index, test.value, func(e *Event) bool {
+		s.ScanIndex(test.index, test.value, 0, func(e *Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
 
-		s2.ScanIndex(test.index, test.value, func(e *Event) bool {
+		s2.ScanIndex(test.index, test.value, 0, func(e *Event) bool {
 			found2 = append(found2, string(e.Data))
 			return true
 		})
@@ -318,12 +385,12 @@ func TestClose(t *testing.T) {
 	found := make([]string, 0)
 	found2 := make([]string, 0)
 
-	s.Iterate(func(e *Event) bool {
+	s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
 
-	s2.Iterate(func(e *Event) bool {
+	s2.Iterate(0, func(e *Event) bool {
 		found2 = append(found2, string(e.Data))
 		return true
 	})
@@ -374,7 +441,7 @@ func TestInterleavedReadWrites(t *testing.T) {
 
 	found := make([]string, 0)
 
-	s.ScanIndex("c", "c", func(e *Event) bool {
+	s.ScanIndex("c", "c", 0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
@@ -389,7 +456,7 @@ func TestInterleavedReadWrites(t *testing.T) {
 
 	found = make([]string, 0)
 
-	s.Iterate(func(e *Event) bool {
+	s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
@@ -413,7 +480,7 @@ func TestRecoverOpenCorruptedLog(t *testing.T) {
 
 	found := make([]string, 0)
 
-	s.Iterate(func(e *Event) bool {
+	s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
@@ -456,7 +523,7 @@ func TestFailedWrite(t *testing.T) {
 
 	found := make([]string, 0)
 
-	s.Iterate(func(e *Event) bool {
+	s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
@@ -476,7 +543,7 @@ func TestFailedWrite(t *testing.T) {
 
 	found = make([]string, 0)
 
-	s.Iterate(func(e *Event) bool {
+	s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
