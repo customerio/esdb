@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"path/filepath"
+	"time"
 )
 
 type Node struct {
@@ -62,7 +63,7 @@ func (n *Node) Start(join string) (err error) {
 
 func (n *Node) Event(body []byte, indexes map[string]string) error {
 	rpc := &NodeRPC{n}
-	return rpc.Event(NewEventCommand(body, indexes), &NoResponse{})
+	return rpc.Event(NewEventCommand(body, indexes, int(time.Now().Unix())), &EventCommandResponse{})
 }
 
 func (n *Node) RemoveFromCluster(name string) error {
