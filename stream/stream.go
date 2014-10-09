@@ -21,6 +21,7 @@ type Stream interface {
 	Write(data []byte, indexes map[string]string) (int, error)
 	ScanIndex(name, value string, offset int64, scanner Scanner) error
 	Iterate(offset int64, scanner Scanner) (int64, error)
+	Offset() int64
 	Closed() bool
 	Close() error
 }

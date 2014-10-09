@@ -69,6 +69,10 @@ func (s *closedStream) Iterate(offset int64, scanner Scanner) (int64, error) {
 	return iterate(s.stream, offset, scanner)
 }
 
+func (s *closedStream) Offset() int64 {
+	return 0
+}
+
 func (s *closedStream) Closed() bool {
 	return true
 }
