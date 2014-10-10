@@ -68,7 +68,7 @@ func scan(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interfa
 
 	index := req.FormValue("index")
 	value := req.FormValue("value")
-	offset, _ := strconv.ParseInt(req.FormValue("continuation"), 10, 64)
+	continuation := req.FormValue("continuation")
 	limit, _ := strconv.Atoi(req.FormValue("limit"))
 
 	events := make([]string, 0, limit)
@@ -78,24 +78,21 @@ func scan(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interfa
 	}
 
 	if index != "" {
-		err = n.db.stream.ScanIndex(index, value, offset, func(e *stream.Event) bool {
+		continuation, err = n.db.Scan(index, value, continuation, func(e *stream.Event) bool {
 			count += 1
 			events = append(events, string(e.Data))
-			offset = e.Next(index, value)
 			return count < limit
 		})
 	} else {
-		offset, err = n.db.stream.Iterate(offset, func(e *stream.Event) bool {
+		continuation, err = n.db.Iterate(continuation, func(e *stream.Event) bool {
 			count += 1
 			events = append(events, string(e.Data))
 			return count < limit
 		})
 	}
 
-	var continuation string
-
-	if offset > 0 {
-		continuation = strconv.FormatInt(offset, 10)
+	if err != nil {
+		w.WriteHeader(500)
 	}
 
 	return map[string]interface{}{

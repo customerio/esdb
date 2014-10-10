@@ -4,7 +4,6 @@ import (
 	"github.com/goraft/raft"
 
 	"errors"
-	"fmt"
 	"net/rpc"
 	"strings"
 )

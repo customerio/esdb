@@ -50,9 +50,9 @@ func scanIndex(stream io.ReadSeeker, index string, offset int64, scanner Scanner
 		stream.Seek(offset, 0)
 
 		if event, err := pullEvent(stream); err == nil {
-			if scanner(event) {
-				offset = event.offsets[index]
-			} else {
+			offset = event.offsets[index]
+
+			if !scanner(event) {
 				offset = 0
 			}
 		} else {
