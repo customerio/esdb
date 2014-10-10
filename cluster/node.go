@@ -63,7 +63,7 @@ func (n *Node) Start(join string) (err error) {
 
 func (n *Node) Event(body []byte, indexes map[string]string) error {
 	rpc := &NodeRPC{n}
-	return rpc.Event(NewEventCommand(body, indexes, int(time.Now().Unix())), &EventCommandResponse{})
+	return rpc.Event(NewEventCommand(body, indexes, time.Now().UnixNano()), &EventCommandResponse{})
 }
 
 func (n *Node) RemoveFromCluster(name string) error {

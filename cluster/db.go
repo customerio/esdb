@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,8 +15,8 @@ import (
 
 type DB struct {
 	dir     string
-	closed  []int
-	current int
+	closed  []int64
+	current int64
 	stream  stream.Stream
 }
 
@@ -26,19 +27,41 @@ func NewDb(path string) *DB {
 }
 
 func (db *DB) Offset() int64 {
-	return db.stream.Offset()
+	if db.stream != nil {
+		return db.stream.Offset()
+	} else {
+		return 0
+	}
 }
 
-func (db *DB) Rotate(timestamp int) error {
-	streampath := filepath.Join(db.dir, fmt.Sprint("events.", timestamp, ".stream"))
+func (db *DB) Write(body []byte, indexes map[string]string) error {
+	if db.current == 0 {
+		// reading through an old stream, ignore
+		return nil
+	}
 
-	s, err := stream.Open(streampath)
+	if db.stream == nil {
+		log.Fatal(errors.New("No stream open."))
+	}
+
+	_, err := db.stream.Write(body, indexes)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return nil
+}
+
+func (db *DB) Rotate(timestamp int64) error {
+	s, err := stream.Open(db.path(timestamp))
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 		log.Fatal(err)
 	}
 
 	if s != nil && s.Closed() {
 		db.closed = append(db.closed, timestamp)
+		db.stream = nil
+		db.current = 0
 	} else {
 		if db.stream != nil {
 			err = db.stream.Close() // TODO async close?
@@ -49,12 +72,12 @@ func (db *DB) Rotate(timestamp int) error {
 			db.closed = append(db.closed, db.current)
 		}
 
-		err = os.Remove(streampath)
+		err = os.Remove(db.path(timestamp))
 		if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 			log.Fatal(err)
 		}
 
-		s, err = stream.New(streampath)
+		s, err = stream.New(db.path(timestamp))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -125,25 +148,12 @@ func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, erro
 	return buildContinuation(ts, offset), nil
 }
 
-func (db *DB) Write(body []byte, indexes map[string]string) error {
-	if db.stream == nil {
-		log.Fatal(errors.New("No stream open."))
-	}
-
-	_, err := db.stream.Write(body, indexes)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return nil
-}
-
-func (db *DB) path(ts int) string {
+func (db *DB) path(ts int64) string {
 	return filepath.Join(db.dir, fmt.Sprint("events.", ts, ".stream"))
 }
 
-func (db *DB) prevTimestamp(timestamp int) int {
-	var result int
+func (db *DB) prevTimestamp(timestamp int64) int64 {
+	var result int64
 
 	for _, ts := range db.closed {
 		if ts < timestamp && ts > result {
@@ -154,8 +164,10 @@ func (db *DB) prevTimestamp(timestamp int) int {
 	return result
 }
 
-func (db *DB) nextTimestamp(timestamp int) int {
-	result := 9999999999
+func (db *DB) nextTimestamp(timestamp int64) int64 {
+	var result int64
+
+	result = math.MaxInt64
 
 	for _, ts := range db.closed {
 		if ts > timestamp && ts < result {
@@ -167,14 +179,14 @@ func (db *DB) nextTimestamp(timestamp int) int {
 		result = db.current
 	}
 
-	if result == 9999999999 {
+	if result == math.MaxInt64 {
 		result = 0
 	}
 
 	return result
 }
 
-func (db *DB) parseContinuation(continuation string, reverse bool) (int, int64) {
+func (db *DB) parseContinuation(continuation string, reverse bool) (int64, int64) {
 	timestamp := db.current
 
 	if !reverse && len(db.closed) > 0 {
@@ -187,7 +199,7 @@ func (db *DB) parseContinuation(continuation string, reverse bool) (int, int64) 
 		parts := strings.SplitN(continuation, ":", 2)
 
 		if len(parts) == 2 {
-			timestamp, _ = strconv.Atoi(parts[0])
+			timestamp, _ = strconv.ParseInt(parts[0], 10, 64)
 			offset, _ = strconv.ParseInt(parts[1], 10, 64)
 		}
 	}
@@ -195,7 +207,7 @@ func (db *DB) parseContinuation(continuation string, reverse bool) (int, int64) 
 	return timestamp, offset
 }
 
-func buildContinuation(ts int, offset int64) string {
+func buildContinuation(ts int64, offset int64) string {
 	if ts > 0 {
 		return fmt.Sprint(ts, ":", offset)
 	} else {

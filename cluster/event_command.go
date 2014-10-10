@@ -7,14 +7,14 @@ import (
 type EventCommand struct {
 	Body      []byte            `json:"body"`
 	Indexes   map[string]string `json:"indexes"`
-	Timestamp int               `json:"timestamp"`
+	Timestamp int64             `json:"timestamp"`
 }
 
 type EventCommandResponse struct {
 	Rotate bool
 }
 
-func NewEventCommand(body []byte, indexes map[string]string, timestamp int) *EventCommand {
+func NewEventCommand(body []byte, indexes map[string]string, timestamp int64) *EventCommand {
 	return &EventCommand{
 		Body:      body,
 		Indexes:   indexes,

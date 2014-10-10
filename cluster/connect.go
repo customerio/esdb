@@ -75,7 +75,7 @@ func createCluster(n *Node) error {
 
 	if err == nil {
 		_, err = n.raft.Do(&RotateCommand{
-			Timestamp: int(time.Now().Unix()),
+			Timestamp: time.Now().UnixNano(),
 		})
 	}
 

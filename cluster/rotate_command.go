@@ -9,10 +9,10 @@ const (
 )
 
 type RotateCommand struct {
-	Timestamp int `json:"timestamp"`
+	Timestamp int64 `json:"timestamp"`
 }
 
-func NewRotateCommand(timestamp int) *RotateCommand {
+func NewRotateCommand(timestamp int64) *RotateCommand {
 	return &RotateCommand{
 		Timestamp: timestamp,
 	}
