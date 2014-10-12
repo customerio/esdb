@@ -1,8 +1,11 @@
 package cluster
 
 import (
+	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/stream"
+	"github.com/goraft/raft"
 
+	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -11,14 +14,19 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type DB struct {
-	dir     string
-	closed  []int64
-	current int64
-	stream  stream.Stream
+	dir          string
+	closed       []int64
+	current      int64
+	stream       stream.Stream
+	raft         raft.Server
+	snapshotting sync.RWMutex
 }
+
+var slock sync.Mutex
 
 func NewDb(path string) *DB {
 	return &DB{
@@ -40,6 +48,9 @@ func (db *DB) Write(body []byte, indexes map[string]string) error {
 		return nil
 	}
 
+	db.snapshotting.RLock()
+	defer db.snapshotting.RUnlock()
+
 	if db.stream == nil {
 		log.Fatal(errors.New("No stream open."))
 	}
@@ -59,7 +70,7 @@ func (db *DB) Rotate(timestamp int64) error {
 	}
 
 	if s != nil && s.Closed() {
-		db.closed = append(db.closed, timestamp)
+		db.addClosed(timestamp)
 		db.stream = nil
 		db.current = 0
 	} else {
@@ -69,21 +80,11 @@ func (db *DB) Rotate(timestamp int64) error {
 				log.Fatal(err)
 			}
 
-			db.closed = append(db.closed, db.current)
+			db.addClosed(db.current)
+			db.snapshot()
 		}
 
-		err = os.Remove(db.path(timestamp))
-		if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
-			log.Fatal(err)
-		}
-
-		s, err = stream.New(db.path(timestamp))
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		db.current = timestamp
-		db.stream = s
+		db.setCurrent(timestamp)
 	}
 
 	return nil
@@ -148,8 +149,73 @@ func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, erro
 	return buildContinuation(ts, offset), nil
 }
 
+func (db *DB) Save() ([]byte, error) {
+	buf := &bytes.Buffer{}
+
+	binary.WriteInt64(buf, db.current)
+
+	binary.WriteUvarint(buf, len(db.closed))
+
+	for _, ts := range db.closed {
+		binary.WriteInt64(buf, ts)
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (db *DB) Recovery(b []byte) error {
+	buf := bytes.NewBuffer(b)
+
+	db.setCurrent(binary.ReadInt64(buf))
+
+	count := int(binary.ReadUvarint(buf))
+
+	for i := 0; i < count; i++ {
+		db.addClosed(binary.ReadInt64(buf))
+	}
+
+	return nil
+}
+
 func (db *DB) path(ts int64) string {
 	return filepath.Join(db.dir, fmt.Sprint("events.", ts, ".stream"))
+}
+
+func (db *DB) addClosed(ts int64) {
+	for _, existing := range db.closed {
+		if existing == ts {
+			return
+		}
+	}
+
+	db.closed = append(db.closed, ts)
+}
+
+func (db *DB) setCurrent(timestamp int64) {
+	err := os.Remove(db.path(timestamp))
+	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
+		log.Fatal(err)
+	}
+
+	s, err := stream.New(db.path(timestamp))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db.current = timestamp
+	db.stream = s
+}
+
+func (db *DB) snapshot() {
+	db.snapshotting.Lock()
+
+	go (func() {
+		if err := db.raft.TakeSnapshot(); err != nil {
+			panic(err)
+		}
+
+		db.snapshotting.Unlock()
+	})()
 }
 
 func (db *DB) prevTimestamp(timestamp int64) int64 {

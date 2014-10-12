@@ -42,8 +42,18 @@ func initRaft(n *Node) (raft.Server, error) {
 
 	n.db = NewDb(filepath.Join(n.path, "stream"))
 
-	s, err := raft.NewServer(n.name, n.path, transporter, nil, n.db, "")
+	s, err := raft.NewServer(n.name, n.path, transporter, n.db, n.db, "")
 	if err != nil {
+		return nil, err
+	}
+
+	n.db.raft = s
+
+	if err := os.MkdirAll(filepath.Join(n.path, "snapshot"), 0744); err != nil {
+		log.Fatalf("Unable to create stream directory: %v", err)
+	}
+
+	if err = s.LoadSnapshot(); err != nil {
 		return nil, err
 	}
 
