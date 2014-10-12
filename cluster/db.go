@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type DB struct {
@@ -75,12 +76,17 @@ func (db *DB) Rotate(timestamp int64) error {
 		db.current = 0
 	} else {
 		if db.stream != nil {
+			start := time.Now()
+
 			err = db.stream.Close() // TODO async close?
 			if err != nil {
 				log.Fatal(err)
 			}
 
 			db.addClosed(db.current)
+
+			log.Println("STREAM: Closed", db.current, "in", time.Since(start))
+
 			db.snapshot()
 		}
 
@@ -204,16 +210,23 @@ func (db *DB) setCurrent(timestamp int64) {
 
 	db.current = timestamp
 	db.stream = s
+
+	log.Println("STREAM: Creating", db.current)
 }
 
 func (db *DB) snapshot() {
 	db.snapshotting.Lock()
+
+	log.Println("RAFT SNAPSHOT: Starting...")
+
+	start := time.Now()
 
 	go (func() {
 		if err := db.raft.TakeSnapshot(); err != nil {
 			panic(err)
 		}
 
+		log.Println("RAFT SNAPSHOT: Complete in", time.Since(start))
 		db.snapshotting.Unlock()
 	})()
 }
