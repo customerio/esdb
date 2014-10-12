@@ -16,6 +16,8 @@ func RestServer(n *Node) error {
 
 	n.HandleFunc("/events", n.eventHandler)
 
+	n.HandleFunc("/stream/", n.recoverHandler)
+
 	log.Println("Listening at:", fmt.Sprintf("http://%s:%d", n.host, n.port))
 
 	return http.ListenAndServe(fmt.Sprintf("%s:%d", n.host, n.port), nil)

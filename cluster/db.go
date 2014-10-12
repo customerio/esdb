@@ -18,6 +18,8 @@ import (
 	"time"
 )
 
+var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that still open.")
+
 type DB struct {
 	dir          string
 	closed       []int64
@@ -65,7 +67,7 @@ func (db *DB) Write(body []byte, indexes map[string]string) error {
 }
 
 func (db *DB) Rotate(timestamp int64) error {
-	s, err := stream.Open(db.path(timestamp))
+	s, err := db.retrieveStream(timestamp, false)
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 		log.Fatal(err)
 	}
@@ -102,7 +104,7 @@ func (db *DB) Scan(name, value, continuation string, scanner stream.Scanner) (st
 	ts, offset := db.parseContinuation(continuation, true)
 
 	for !stopped && ts > 0 {
-		s, err := stream.Open(db.path(ts))
+		s, err := db.retrieveStream(ts, true)
 		if err != nil {
 			return "", err
 		}
@@ -132,7 +134,7 @@ func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, erro
 	ts, offset := db.parseContinuation(continuation, false)
 
 	for !stopped && ts > 0 {
-		s, err := stream.Open(db.path(ts))
+		s, err := db.retrieveStream(ts, true)
 		if err != nil {
 			return "", err
 		}
@@ -178,6 +180,16 @@ func (db *DB) Recovery(b []byte) error {
 
 	for i := 0; i < count; i++ {
 		db.addClosed(binary.ReadInt64(buf))
+	}
+
+	return nil
+}
+
+func (db *DB) RecoverStreams() error {
+	for _, ts := range db.closed {
+		if _, err := db.retrieveStream(ts, true); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -263,6 +275,33 @@ func (db *DB) nextTimestamp(timestamp int64) int64 {
 	}
 
 	return result
+}
+
+func (db *DB) retrieveStream(ts int64, fetchMissing bool) (stream.Stream, error) {
+	if db.current == ts && db.stream != nil {
+		return db.stream, nil
+	}
+
+	var s stream.Stream
+	var err error
+	var missing bool
+
+	s, err = stream.Open(db.path(ts))
+
+	if err != nil && strings.Contains(err.Error(), "no such file or directory") {
+		missing = true
+	}
+
+	if s != nil && !s.Closed() {
+		err = RETRIEVED_OPEN_STREAM
+		missing = true
+	}
+
+	if missing && fetchMissing {
+		return RecoverStream(db.raft, db.dir, fmt.Sprint("events.", ts, ".stream"))
+	} else {
+		return s, err
+	}
 }
 
 func (db *DB) parseContinuation(continuation string, reverse bool) (int64, int64) {

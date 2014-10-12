@@ -27,6 +27,10 @@ func Connect(n *Node, existing string) error {
 		log.Println("Recovered from log")
 	}
 
+	if err == nil {
+		err = n.db.RecoverStreams()
+	}
+
 	return err
 }
 
@@ -42,7 +46,7 @@ func initRaft(n *Node) (raft.Server, error) {
 
 	n.db = NewDb(filepath.Join(n.path, "stream"))
 
-	s, err := raft.NewServer(n.name, n.path, transporter, n.db, n.db, "")
+	s, err := raft.NewServer(n.name, n.path, transporter, n.db, n.db, fmt.Sprint("http://", n.host, ":", n.port))
 	if err != nil {
 		return nil, err
 	}
