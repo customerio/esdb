@@ -51,7 +51,11 @@ func (n *NodeRPC) Rotate(command *RotateCommand, reply *NoResponse) error {
 func executeEventCommandOnLeader(n *Node, message string, command raft.Command, reply *EventCommandResponse) (err error) {
 	if n.raft.State() == "leader" {
 		res, err := n.raft.Do(command)
-		*reply = res.(EventCommandResponse)
+
+		if ecr, ok := res.(EventCommandResponse); ok {
+			*reply = ecr
+		}
+
 		return err
 	} else {
 		leader := n.raft.Leader()
