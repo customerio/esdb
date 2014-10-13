@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	ROTATE_THRESHOLD = 100
+	ROTATE_THRESHOLD = 2147483648
 )
 
 type RotateCommand struct {
