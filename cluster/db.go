@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that still open.")
+var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that's still open.")
 
 type DB struct {
 	dir          string
