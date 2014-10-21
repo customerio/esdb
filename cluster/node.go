@@ -1,7 +1,7 @@
 package cluster
 
 import (
-	"github.com/goraft/raft"
+	"github.com/jrallison/raft"
 
 	"fmt"
 	"io/ioutil"

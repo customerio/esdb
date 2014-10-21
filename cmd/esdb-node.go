@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/customerio/esdb/cluster"
-	"github.com/goraft/raft"
+	"github.com/jrallison/raft"
 
 	"flag"
 	"fmt"

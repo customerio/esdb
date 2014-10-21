@@ -2,7 +2,7 @@ package cluster
 
 import (
 	"github.com/customerio/esdb/stream"
-	"github.com/goraft/raft"
+	"github.com/jrallison/raft"
 
 	"errors"
 	"fmt"

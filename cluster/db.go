@@ -3,7 +3,7 @@ package cluster
 import (
 	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/stream"
-	"github.com/goraft/raft"
+	"github.com/jrallison/raft"
 
 	"bytes"
 	"errors"
@@ -24,7 +24,6 @@ type DB struct {
 	dir          string
 	closed       []uint64
 	current      uint64
-	offset       uint64
 	stream       stream.Stream
 	raft         raft.Server
 	snapshotting sync.RWMutex
@@ -43,18 +42,16 @@ func NewDb(path string) *DB {
 }
 
 func (db *DB) Init() error {
-	db.offset = 1
-	return db.Rotate()
+	return db.Rotate(1)
 }
 
-func (db *DB) Write(body []byte, indexes map[string]string) error {
-	db.offset += 1
-
-	if db.current == 0 {
+func (db *DB) Write(commit uint64, body []byte, indexes map[string]string) error {
+	if db.current == 0 || commit <= db.current {
+		// old commit
 		return nil
 	}
 
-	println("writing commit:", db.offset, "current:", db.current)
+	println("writing commit:", commit, "current:", db.current)
 
 	db.snapshotting.RLock()
 	defer db.snapshotting.RUnlock()
@@ -71,14 +68,14 @@ func (db *DB) Write(body []byte, indexes map[string]string) error {
 	return nil
 }
 
-func (db *DB) Rotate() error {
-	s, err := db.retrieveStream(db.offset, false)
+func (db *DB) Rotate(commit uint64) error {
+	s, err := db.retrieveStream(commit, false)
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 		log.Fatal(err)
 	}
 
 	if s != nil && s.Closed() {
-		db.addClosed(db.offset)
+		db.addClosed(commit)
 		db.stream = nil
 		db.current = 0
 	} else {
@@ -97,7 +94,7 @@ func (db *DB) Rotate() error {
 			//db.snapshot()
 		}
 
-		db.setCurrent(db.offset)
+		db.setCurrent(commit)
 	}
 
 	return nil
@@ -214,19 +211,15 @@ func (db *DB) addClosed(commit uint64) {
 	db.closed = append(db.closed, commit)
 }
 
-func (db *DB) setCurrent(offset uint64) {
-	db.current = offset
+func (db *DB) setCurrent(commit uint64) {
+	db.current = commit
 
-	if offset == 0 {
-		return
-	}
-
-	err := os.Remove(db.path(offset))
+	err := os.Remove(db.path(commit))
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 		log.Fatal(err)
 	}
 
-	s, err := stream.New(db.path(offset))
+	s, err := stream.New(db.path(commit))
 	if err != nil {
 		log.Fatal(err)
 	}

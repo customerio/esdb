@@ -1,7 +1,7 @@
 package cluster
 
 import (
-	"github.com/goraft/raft"
+	"github.com/jrallison/raft"
 
 	"log"
 )
@@ -32,11 +32,12 @@ func (c *EventCommand) Apply(context raft.Context) (interface{}, error) {
 	server := context.Server()
 	db := server.Context().(*DB)
 
-	err := db.Write(c.Body, c.Indexes)
+	index := context.CurrentIndex()
 
-	if err == nil && db.offset%ROTATE_THRESHOLD == 0 {
-		println("rotating", db.offset)
-		err = db.Rotate()
+	err := db.Write(index, c.Body, c.Indexes)
+
+	if err == nil && index%ROTATE_THRESHOLD == 0 {
+		err = db.Rotate(index)
 		if err != nil {
 			log.Fatal(err)
 		}
