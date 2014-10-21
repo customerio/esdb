@@ -46,6 +46,8 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 		w.WriteHeader(400)
 	}
 
+	println("indexing", string(body))
+
 	if err == nil {
 		err = n.Event([]byte(data.Body), data.Indexes)
 	} else {

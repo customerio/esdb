@@ -36,7 +36,6 @@ func Connect(n *Node, existing string) error {
 
 func initRaft(n *Node) (raft.Server, error) {
 	raft.RegisterCommand(&EventCommand{})
-	raft.RegisterCommand(&RotateCommand{})
 
 	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
 
@@ -86,12 +85,6 @@ func createCluster(n *Node) error {
 		Name:             n.raft.Name(),
 		ConnectionString: fmt.Sprintf("http://%s:%d", n.host, n.port),
 	})
-
-	if err == nil {
-		_, err = n.raft.Do(&RotateCommand{
-			Timestamp: time.Now().UnixNano(),
-		})
-	}
 
 	return err
 }

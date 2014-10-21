@@ -62,8 +62,9 @@ func (n *Node) Start(join string) (err error) {
 }
 
 func (n *Node) Event(body []byte, indexes map[string]string) error {
+	println("node sending event rpc")
 	rpc := &NodeRPC{n}
-	return rpc.Event(NewEventCommand(body, indexes, time.Now().UnixNano()), &EventCommandResponse{})
+	return rpc.Event(NewEventCommand(body, indexes, time.Now().UnixNano()), &NoResponse{})
 }
 
 func (n *Node) RemoveFromCluster(name string) error {
