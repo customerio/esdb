@@ -35,6 +35,10 @@ func NewDb(path string) *DB {
 	return &DB{dir: path}
 }
 
+func (db *DB) Offset() int64 {
+	return db.stream.Offset()
+}
+
 func (db *DB) Write(commit uint64, body []byte, indexes map[string]string) error {
 	if db.current == 0 || commit <= db.current {
 		// old commit

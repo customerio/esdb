@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	ROTATE_THRESHOLD = 4
+	ROTATE_THRESHOLD = 100
 )
 
 type EventCommand struct {
@@ -36,7 +36,7 @@ func (c *EventCommand) Apply(context raft.Context) (interface{}, error) {
 
 	err := db.Write(index, c.Body, c.Indexes)
 
-	if err == nil && index%ROTATE_THRESHOLD == 0 {
+	if err == nil && db.Offset() > ROTATE_THRESHOLD {
 		err = db.Rotate(index, context.CurrentTerm())
 		if err != nil {
 			log.Fatal(err)
