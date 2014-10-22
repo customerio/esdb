@@ -49,8 +49,6 @@ func (db *DB) Write(commit uint64, body []byte, indexes map[string]string) error
 		return nil
 	}
 
-	println("writing commit:", commit, "current:", db.current)
-
 	db.snapshotting.RLock()
 	defer db.snapshotting.RUnlock()
 
