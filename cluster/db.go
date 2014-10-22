@@ -36,7 +36,11 @@ func NewDb(path string) *DB {
 }
 
 func (db *DB) Offset() int64 {
-	return db.stream.Offset()
+	if db.stream == nil {
+		return 0
+	} else {
+		return db.stream.Offset()
+	}
 }
 
 func (db *DB) Write(commit uint64, body []byte, indexes map[string]string) error {
