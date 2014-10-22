@@ -32,17 +32,7 @@ type DB struct {
 var slock sync.Mutex
 
 func NewDb(path string) *DB {
-	db := &DB{dir: path}
-
-	if err := db.Init(); err != nil {
-		log.Fatal(err)
-	}
-
-	return db
-}
-
-func (db *DB) Init() error {
-	return db.Rotate(1)
+	return &DB{dir: path}
 }
 
 func (db *DB) Write(commit uint64, body []byte, indexes map[string]string) error {
@@ -68,7 +58,7 @@ func (db *DB) Write(commit uint64, body []byte, indexes map[string]string) error
 	return nil
 }
 
-func (db *DB) Rotate(commit uint64) error {
+func (db *DB) Rotate(commit, term uint64) error {
 	s, err := db.retrieveStream(commit, false)
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 		log.Fatal(err)
@@ -91,7 +81,7 @@ func (db *DB) Rotate(commit uint64) error {
 
 			log.Println("STREAM: Closed", db.current, "in", time.Since(start))
 
-			//db.snapshot()
+			db.snapshot(commit, term)
 		}
 
 		db.setCurrent(commit)
@@ -157,6 +147,10 @@ func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, erro
 	}
 
 	return buildContinuation(commit, offset), nil
+}
+
+func (db *DB) SaveAt(index, term uint64) ([]byte, error) {
+	return db.Save()
 }
 
 func (db *DB) Save() ([]byte, error) {
@@ -229,20 +223,17 @@ func (db *DB) setCurrent(commit uint64) {
 	log.Println("STREAM: Creating", db.current)
 }
 
-func (db *DB) snapshot() {
-	db.snapshotting.Lock()
-
+func (db *DB) snapshot(index, term uint64) {
 	log.Println("RAFT SNAPSHOT: Starting...")
 
 	start := time.Now()
 
 	go (func() {
-		if err := db.raft.TakeSnapshot(); err != nil {
+		if err := db.raft.TakeSnapshotFrom(index, term); err != nil {
 			panic(err)
 		}
 
 		log.Println("RAFT SNAPSHOT: Complete in", time.Since(start))
-		db.snapshotting.Unlock()
 	})()
 }
 

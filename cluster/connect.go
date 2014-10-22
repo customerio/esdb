@@ -86,5 +86,7 @@ func createCluster(n *Node) error {
 		ConnectionString: fmt.Sprintf("http://%s:%d", n.host, n.port),
 	})
 
+	n.db.Rotate(n.raft.CommitIndex(), n.raft.Term())
+
 	return err
 }
