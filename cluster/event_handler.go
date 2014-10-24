@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type event struct {
@@ -46,8 +47,20 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 		w.WriteHeader(400)
 	}
 
+	w.Header().Set("Cluster-Peers", strings.Join(n.ClusterConnectionStrings(), ","))
+
 	if err == nil {
 		err = n.Event([]byte(data.Body), data.Indexes)
+
+		if err == NOT_LEADER_ERROR {
+			var uri string
+			uri, err = n.LeaderConnectionString()
+			http.Redirect(w, req, uri, 302)
+
+			if err == nil {
+				return map[string]interface{}{}, NOT_LEADER_ERROR
+			}
+		}
 	} else {
 		w.WriteHeader(500)
 	}

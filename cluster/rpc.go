@@ -31,10 +31,6 @@ func (n *NodeRPC) RemoveFromCluster(command raft.DefaultLeaveCommand, reply *NoR
 	return executeOnLeader(n.node, "Node.RemoveFromCluster", &command)
 }
 
-func (n *NodeRPC) Event(command *EventCommand, reply *NoResponse) error {
-	return executeOnLeader(n.node, "Node.Event", command)
-}
-
 func executeOnLeader(n *Node, message string, command raft.Command) (err error) {
 	if n.raft.State() == "leader" {
 		_, err = n.raft.Do(command)

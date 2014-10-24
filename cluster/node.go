@@ -3,6 +3,7 @@ package cluster
 import (
 	"github.com/jrallison/raft"
 
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -11,6 +12,9 @@ import (
 	"path/filepath"
 	"time"
 )
+
+var NOT_LEADER_ERROR = errors.New("Not current leader")
+var NO_LEADER_ERROR = errors.New("No current leader")
 
 type Node struct {
 	name string
@@ -61,9 +65,14 @@ func (n *Node) Start(join string) (err error) {
 	return RestServer(n)
 }
 
-func (n *Node) Event(body []byte, indexes map[string]string) error {
-	rpc := &NodeRPC{n}
-	return rpc.Event(NewEventCommand(body, indexes, time.Now().UnixNano()), &NoResponse{})
+func (n *Node) Event(body []byte, indexes map[string]string) (err error) {
+	if n.raft.State() == "leader" {
+		_, err = n.raft.Do(NewEventCommand(body, indexes, time.Now().UnixNano()))
+	} else {
+		err = NOT_LEADER_ERROR
+	}
+
+	return
 }
 
 func (n *Node) RemoveFromCluster(name string) error {
@@ -85,4 +94,24 @@ func (n *Node) State() NodeState {
 
 func (n *Node) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	http.HandleFunc(pattern, handler)
+}
+
+func (n *Node) LeaderConnectionString() (string, error) {
+	leader := n.raft.Leader()
+
+	if node, ok := n.raft.Peers()[leader]; ok {
+		return node.ConnectionString, nil
+	} else {
+		return "", NO_LEADER_ERROR
+	}
+}
+
+func (n *Node) ClusterConnectionStrings() []string {
+	peers := []string{fmt.Sprintf("http://%s:%d", n.host, n.port)}
+
+	for _, peer := range n.raft.Peers() {
+		peers = append(peers, peer.ConnectionString)
+	}
+
+	return peers
 }
