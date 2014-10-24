@@ -50,6 +50,9 @@ func initRaft(n *Node) (raft.Server, error) {
 		return nil, err
 	}
 
+	s.SetHeartbeatInterval(25 * time.Millisecond)
+	s.SetElectionTimeout(time.Second)
+
 	n.db.raft = s
 
 	if err := os.MkdirAll(filepath.Join(n.path, "snapshot"), 0744); err != nil {
