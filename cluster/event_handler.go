@@ -47,8 +47,6 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 		w.WriteHeader(400)
 	}
 
-	w.Header().Set("Cluster-Peers", strings.Join(n.ClusterConnectionStrings(), ","))
-
 	if err == nil {
 		err = n.Event([]byte(data.Body), data.Indexes)
 
