@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	ROTATE_THRESHOLD = 1073741824
+	ROTATE_THRESHOLD = 536870912
 )
 
 type EventCommand struct {
