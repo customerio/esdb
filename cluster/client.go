@@ -3,7 +3,6 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -65,7 +64,7 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 		return c.Event(content, indexes)
 	}
 
-	return e
+	return nil
 }
 
 func (c *Client) Close() {
