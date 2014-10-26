@@ -75,8 +75,6 @@ func joinCluster(n *Node, existing string) error {
 		return errors.New("Cannot join with an existing log")
 	}
 
-	n.db.Rotate(1, 0)
-
 	return executeOn(existing, "Node.JoinCluster", &raft.DefaultJoinCommand{
 		Name:             n.raft.Name(),
 		ConnectionString: fmt.Sprintf("http://%s:%d", n.host, n.port),
@@ -90,8 +88,6 @@ func createCluster(n *Node) error {
 		Name:             n.raft.Name(),
 		ConnectionString: fmt.Sprintf("http://%s:%d", n.host, n.port),
 	})
-
-	n.db.Rotate(1, 0)
 
 	return err
 }
