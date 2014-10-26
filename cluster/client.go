@@ -59,7 +59,6 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 	defer resp.Body.Close()
 
 	r, e := ioutil.ReadAll(resp.Body)
-	fmt.Println(resp.StatusCode, string(r), e, resp.Header.Get("Cluster-Leader"))
 
 	leader := resp.Header.Get("Cluster-Leader")
 
