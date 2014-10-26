@@ -62,7 +62,7 @@ func (n *Node) clusterStatusHandler(w http.ResponseWriter, req *http.Request) {
 		body["_self"] = "not connected"
 	}
 
-	w.Header().Set("Cluster-Peers", strings.Join(n.ClusterConnectionStrings(), ","))
+	w.Header().Set("Cluster-Nodes", strings.Join(n.ClusterConnectionStrings(), ","))
 
 	js, _ := json.MarshalIndent(body, "", "  ")
 	w.Write(js)

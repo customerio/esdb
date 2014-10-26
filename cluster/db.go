@@ -32,7 +32,12 @@ type DB struct {
 var slock sync.Mutex
 
 func NewDb(path string) *DB {
-	return &DB{dir: path}
+	db := &DB{dir: path}
+
+	db.Rotate(1, 0)
+
+	return db
+
 }
 
 func (db *DB) Offset() int64 {

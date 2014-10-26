@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 type event struct {
@@ -53,7 +52,8 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 		if err == NOT_LEADER_ERROR {
 			var uri string
 			uri, err = n.LeaderConnectionString()
-			http.Redirect(w, req, uri, 302)
+			w.Header().Set("Cluster-Leader", uri)
+			w.WriteHeader(400)
 
 			if err == nil {
 				return map[string]interface{}{}, NOT_LEADER_ERROR
