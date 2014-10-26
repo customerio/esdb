@@ -58,8 +58,6 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 
 	defer resp.Body.Close()
 
-	r, e := ioutil.ReadAll(resp.Body)
-
 	leader := resp.Header.Get("Cluster-Leader")
 
 	if resp.StatusCode == 400 && leader != "" {
