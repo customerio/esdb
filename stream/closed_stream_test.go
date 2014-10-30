@@ -47,7 +47,7 @@ func TestClosedScan(t *testing.T) {
 	for i, test := range tests {
 		found := make([]string, 0)
 
-		s.ScanIndex(test.index, test.value, func(e *Event) bool {
+		s.ScanIndex(test.index, test.value, 0, func(e *Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
@@ -58,12 +58,38 @@ func TestClosedScan(t *testing.T) {
 	}
 }
 
+func TestClosedContinueScan(t *testing.T) {
+	s := buildStream()
+
+	var offset int64
+	found := make([]string, 0)
+
+	s.ScanIndex("c", "c", offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		offset = e.Next("c", "c")
+		return false
+	})
+	s.ScanIndex("c", "c", offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		offset = e.Next("c", "c")
+		return false
+	})
+
+	if offset != 0 {
+		t.Errorf("Wanted offset: 0, found: %v", offset)
+	}
+
+	if !reflect.DeepEqual(found, []string{"cde", "abc"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"cde", "abc"}, found)
+	}
+}
+
 func TestClosedIterate(t *testing.T) {
 	s := buildStream()
 
 	found := make([]string, 0)
 
-	err := s.Iterate(func(e *Event) bool {
+	_, err := s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
@@ -78,7 +104,7 @@ func TestClosedIterate(t *testing.T) {
 
 	found = make([]string, 0)
 
-	err = s.Iterate(func(e *Event) bool {
+	_, err = s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return len(found) != 2
 	})
@@ -89,6 +115,34 @@ func TestClosedIterate(t *testing.T) {
 
 	if !reflect.DeepEqual(found, []string{"abc", "cde"}) {
 		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde"}, found)
+	}
+}
+
+func TestClosedContinueIterate(t *testing.T) {
+	s := buildStream()
+
+	var offset int64
+	found := make([]string, 0)
+
+	offset, _ = s.Iterate(offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return false
+	})
+	offset, _ = s.Iterate(offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return false
+	})
+	offset, _ = s.Iterate(offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return false
+	})
+	offset, _ = s.Iterate(offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return false
+	})
+
+	if !reflect.DeepEqual(found, []string{"abc", "cde", "def"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found)
 	}
 }
 

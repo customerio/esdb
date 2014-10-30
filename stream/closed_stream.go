@@ -49,22 +49,28 @@ func (s *closedStream) Write(data []byte, indexes map[string]string) (int, error
 	return 0, WRITING_TO_CLOSED_STREAM
 }
 
-func (s *closedStream) ScanIndex(name, value string, scanner Scanner) error {
+func (s *closedStream) ScanIndex(name, value string, offset int64, scanner Scanner) error {
 	index := name + ":" + value
 
-	val, err := s.index.Get([]byte(index))
-	if err != nil {
-		return err
+	if offset <= 0 {
+		val, err := s.index.Get([]byte(index))
+		if err != nil {
+			return err
+		}
+
+		b := bytes.NewReader(val)
+		offset = binary.ReadUvarint(b)
 	}
 
-	b := bytes.NewReader(val)
-	off := binary.ReadUvarint(b)
-
-	return scanIndex(s.stream, index, off, scanner)
+	return scanIndex(s.stream, index, offset, scanner)
 }
 
-func (s *closedStream) Iterate(scanner Scanner) error {
-	return iterate(s.stream, scanner)
+func (s *closedStream) Iterate(offset int64, scanner Scanner) (int64, error) {
+	return iterate(s.stream, offset, scanner)
+}
+
+func (s *closedStream) Offset() int64 {
+	return 0
 }
 
 func (s *closedStream) Closed() bool {
