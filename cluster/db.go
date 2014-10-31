@@ -123,6 +123,10 @@ func (db *DB) Scan(name, value, continuation string, scanner stream.Scanner) (st
 			return !stopped
 		})
 
+		if offset == 0 {
+			commit = db.prev(commit)
+		}
+
 		if err != nil {
 			return "", err
 		}
