@@ -10,15 +10,15 @@ import (
 )
 
 type Client struct {
-	nodes  []string
-	leader string
+	Nodes  []string
+	Leader string
 	quit   bool
 }
 
 func NewClient(node string) *Client {
 	c := &Client{
-		nodes:  []string{node},
-		leader: node,
+		Nodes:  []string{node},
+		Leader: node,
 	}
 
 	go (func() {
@@ -44,14 +44,14 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 
 	reader := strings.NewReader(string(body))
 
-	resp, err := http.Post(c.leader+"/events", "application/json", reader)
+	resp, err := http.Post(c.Leader+"/events", "application/json", reader)
 	if err != nil {
-		if len(c.nodes) == 1 && c.nodes[0] == c.leader {
+		if len(c.Nodes) == 1 && c.Nodes[0] == c.Leader {
 			return err
 		}
 
-		c.leader = c.nodes[rand.Intn(len(c.nodes))]
-		fmt.Println("error when connecting to leader", err, "switching to", c.leader)
+		c.Leader = c.Nodes[rand.Intn(len(c.Nodes))]
+		fmt.Println("error when connecting to leader", err, "switching to", c.Leader)
 		return c.Event(content, indexes)
 	}
 
@@ -60,7 +60,7 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 	leader := resp.Header.Get("Cluster-Leader")
 
 	if resp.StatusCode == 400 && leader != "" {
-		c.leader = leader
+		c.Leader = leader
 		return c.Event(content, indexes)
 	}
 
@@ -72,7 +72,7 @@ func (c *Client) Close() {
 }
 
 func (c *Client) refreshNodes() error {
-	resp, err := http.Get(c.nodes[0] + "/cluster/status")
+	resp, err := http.Get(c.Nodes[0] + "/cluster/status")
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func (c *Client) refreshNodes() error {
 	nodes := strings.Split(resp.Header.Get("Cluster-Nodes"), ",")
 
 	if len(nodes) > 0 {
-		c.nodes = nodes
+		c.Nodes = nodes
 	}
 
 	return nil
