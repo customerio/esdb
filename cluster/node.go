@@ -23,6 +23,7 @@ type Node struct {
 	path string
 	db   *DB
 	raft raft.Server
+	Rest *RestServer
 }
 
 type NodeState struct {
@@ -62,10 +63,28 @@ func (n *Node) Start(join string) (err error) {
 
 	log.Println("Initializing HTTP server")
 
-	return RestServer(n)
+	n.Rest = NewRestServer(n)
+
+	return n.Rest.Start()
+}
+
+func (n *Node) Stop() {
+	if n.Rest != nil {
+		n.Rest.Stop()
+	}
+
+	if n.raft != nil {
+		n.raft.Stop()
+	}
+
+	http.DefaultServeMux = http.NewServeMux()
 }
 
 func (n *Node) Event(body []byte, indexes map[string]string) (err error) {
+	if n.raft == nil {
+		return errors.New("Raft not yet initialized")
+	}
+
 	if n.raft.State() == "leader" {
 		_, err = n.raft.Do(NewEventCommand(body, indexes, time.Now().UnixNano()))
 	} else {

@@ -8,8 +8,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
+
+var registerCommands sync.Once
 
 func Connect(n *Node, existing string) error {
 	r, err := initRaft(n)
@@ -35,7 +38,9 @@ func Connect(n *Node, existing string) error {
 }
 
 func initRaft(n *Node) (raft.Server, error) {
-	raft.RegisterCommand(&EventCommand{})
+	registerCommands.Do(func() {
+		raft.RegisterCommand(&EventCommand{})
+	})
 
 	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
 

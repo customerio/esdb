@@ -7,7 +7,12 @@ import (
 	"net/rpc"
 )
 
-func RestServer(n *Node) error {
+type RestServer struct {
+	listen string
+	stop   chan bool
+}
+
+func NewRestServer(n *Node) *RestServer {
 	rpc.RegisterName("Node", &NodeRPC{n})
 	rpc.HandleHTTP()
 
@@ -18,7 +23,17 @@ func RestServer(n *Node) error {
 
 	n.HandleFunc("/stream/", n.recoverHandler)
 
-	log.Println("Listening at:", fmt.Sprintf("http://%s:%d", n.host, n.port))
+	return &RestServer{
+		fmt.Sprintf("%s:%d", n.host, n.port),
+		make(chan bool),
+	}
+}
 
-	return http.ListenAndServe(fmt.Sprintf("%s:%d", n.host, n.port), nil)
+func (s *RestServer) Start() error {
+	log.Println("Listening at:", "http://"+s.listen)
+
+	return http.ListenAndServe(s.listen, nil)
+}
+
+func (s *RestServer) Stop() {
 }
