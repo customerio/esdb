@@ -21,12 +21,12 @@ import (
 var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that's still open.")
 
 type DB struct {
-	dir          string
-	closed       []uint64
-	current      uint64
-	stream       stream.Stream
-	raft         raft.Server
-	snapshotting sync.RWMutex
+	dir        string
+	closed     []uint64
+	current    uint64
+	MostRecent int64
+	stream     stream.Stream
+	raft       raft.Server
 }
 
 var slock sync.Mutex
@@ -48,14 +48,11 @@ func (db *DB) Offset() int64 {
 	}
 }
 
-func (db *DB) Write(commit uint64, body []byte, indexes map[string]string) error {
+func (db *DB) Write(commit uint64, body []byte, indexes map[string]string, timestamp int64) error {
 	if db.current == 0 || commit <= db.current {
 		// old commit
 		return nil
 	}
-
-	db.snapshotting.RLock()
-	defer db.snapshotting.RUnlock()
 
 	if db.stream == nil {
 		log.Fatal(errors.New("No stream open."))
@@ -64,6 +61,10 @@ func (db *DB) Write(commit uint64, body []byte, indexes map[string]string) error
 	_, err := db.stream.Write(body, indexes)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if timestamp > db.MostRecent {
+		db.MostRecent = timestamp
 	}
 
 	return nil
@@ -172,6 +173,7 @@ func (db *DB) Save() ([]byte, error) {
 	buf := &bytes.Buffer{}
 
 	binary.WriteInt64(buf, int64(db.current))
+	binary.WriteInt64(buf, db.MostRecent)
 
 	binary.WriteUvarint(buf, len(db.closed))
 
@@ -186,6 +188,7 @@ func (db *DB) Recovery(b []byte) error {
 	buf := bytes.NewBuffer(b)
 
 	db.setCurrent(uint64(binary.ReadInt64(buf)))
+	db.MostRecent = binary.ReadInt64(buf)
 
 	count := int(binary.ReadUvarint(buf))
 

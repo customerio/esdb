@@ -109,5 +109,6 @@ func scan(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interfa
 	return map[string]interface{}{
 		"events":       events,
 		"continuation": continuation,
+		"most_recent":  n.db.MostRecent,
 	}, err
 }

@@ -34,7 +34,7 @@ func (c *EventCommand) Apply(context raft.Context) (interface{}, error) {
 
 	index := context.CurrentIndex()
 
-	err := db.Write(index, c.Body, c.Indexes)
+	err := db.Write(index, c.Body, c.Indexes, c.Timestamp)
 
 	if err == nil && db.Offset() > ROTATE_THRESHOLD {
 		err = db.Rotate(index, context.CurrentTerm())
