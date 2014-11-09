@@ -17,13 +17,15 @@ var NOT_LEADER_ERROR = errors.New("Not current leader")
 var NO_LEADER_ERROR = errors.New("No current leader")
 
 type Node struct {
-	name string
-	host string
-	port int
-	path string
-	db   *DB
-	raft raft.Server
-	Rest *RestServer
+	name        string
+	host        string
+	port        int
+	path        string
+	db          *DB
+	raft        raft.Server
+	Rest        *RestServer
+	WriteTimer  Timer
+	RotateTimer Timer
 }
 
 type NodeState struct {
@@ -39,6 +41,7 @@ func NewNode(path, host string, port int) (n *Node) {
 		host: host,
 		port: port,
 		path: path,
+		db:   NewDb(filepath.Join(path, "stream")),
 	}
 
 	// Read existing name or generate a new one.
@@ -78,6 +81,14 @@ func (n *Node) Stop() {
 	}
 
 	http.DefaultServeMux = http.NewServeMux()
+}
+
+func (n *Node) SetWriteTimer(t Timer) {
+	n.db.wtimer = t
+}
+
+func (n *Node) SetRotateTimer(t Timer) {
+	n.db.rtimer = t
 }
 
 func (n *Node) Event(body []byte, indexes map[string]string) (err error) {

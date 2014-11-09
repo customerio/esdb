@@ -48,8 +48,6 @@ func initRaft(n *Node) (raft.Server, error) {
 		log.Fatalf("Unable to create stream directory: %v", err)
 	}
 
-	n.db = NewDb(filepath.Join(n.path, "stream"))
-
 	s, err := raft.NewServer(n.name, n.path, transporter, n.db, n.db, fmt.Sprint("http://", n.host, ":", n.port))
 	if err != nil {
 		return nil, err

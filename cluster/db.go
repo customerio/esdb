@@ -25,6 +25,8 @@ type DB struct {
 	closed     []uint64
 	current    uint64
 	MostRecent int64
+	wtimer     Timer
+	rtimer     Timer
 	stream     stream.Stream
 	raft       raft.Server
 }
@@ -32,7 +34,11 @@ type DB struct {
 var slock sync.Mutex
 
 func NewDb(path string) *DB {
-	db := &DB{dir: path}
+	db := &DB{
+		dir:    path,
+		wtimer: NilTimer{},
+		rtimer: NilTimer{},
+	}
 
 	db.Rotate(1, 0)
 
@@ -58,14 +64,16 @@ func (db *DB) Write(commit uint64, body []byte, indexes map[string]string, times
 		log.Fatal(errors.New("No stream open."))
 	}
 
-	_, err := db.stream.Write(body, indexes)
-	if err != nil {
-		log.Fatal(err)
-	}
+	db.wtimer.Time(func() {
+		_, err := db.stream.Write(body, indexes)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	if timestamp > db.MostRecent {
-		db.MostRecent = timestamp
-	}
+		if timestamp > db.MostRecent {
+			db.MostRecent = timestamp
+		}
+	})
 
 	return nil
 }
@@ -84,14 +92,16 @@ func (db *DB) Rotate(commit, term uint64) error {
 		if db.stream != nil {
 			start := time.Now()
 
-			err = db.stream.Close() // TODO async close?
-			if err != nil {
-				log.Fatal(err)
-			}
+			db.rtimer.Time(func() {
+				err = db.stream.Close() // TODO async close?
+				if err != nil {
+					log.Fatal(err)
+				}
 
-			db.addClosed(db.current)
+				db.addClosed(db.current)
 
-			log.Println("STREAM: Closed", db.current, "in", time.Since(start))
+				log.Println("STREAM: Closed", db.current, "in", time.Since(start))
+			})
 
 			db.snapshot(commit, term)
 		}
