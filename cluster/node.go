@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -37,6 +38,10 @@ type NodeState struct {
 }
 
 func NewNode(path, host string, port int) (n *Node) {
+	if err := os.MkdirAll(filepath.Join(n.path, "stream"), 0744); err != nil {
+		log.Fatalf("Unable to create stream directory: %v", err)
+	}
+
 	n = &Node{
 		host: host,
 		port: port,

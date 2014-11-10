@@ -44,10 +44,6 @@ func initRaft(n *Node) (raft.Server, error) {
 
 	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
 
-	if err := os.MkdirAll(filepath.Join(n.path, "stream"), 0744); err != nil {
-		log.Fatalf("Unable to create stream directory: %v", err)
-	}
-
 	s, err := raft.NewServer(n.name, n.path, transporter, n.db, n.db, fmt.Sprint("http://", n.host, ":", n.port))
 	if err != nil {
 		return nil, err
