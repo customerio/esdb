@@ -21,9 +21,11 @@ func (n *Node) clusterStatusHandler(w http.ResponseWriter, req *http.Request) {
 		statuses := make(map[string]interface{})
 
 		for name, peer := range n.raft.Peers() {
-			call, err := ping(peer)
+			client, call, err := ping(peer)
 
 			if err == nil {
+				defer client.Close()
+
 				reachable += 1
 
 				select {
@@ -68,19 +70,17 @@ func (n *Node) clusterStatusHandler(w http.ResponseWriter, req *http.Request) {
 	w.Write(js)
 }
 
-func ping(peer *raft.Peer) (*rpc.Call, error) {
+func ping(peer *raft.Peer) (*rpc.Client, *rpc.Call, error) {
 	host := strings.Replace(peer.ConnectionString, "http://", "", 1)
 
 	client, err := rpc.DialHTTP("tcp", host)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	defer client.Close()
 
 	state := new(NodeState)
 
 	call := client.Go("Node.State", NoArgs{}, state, nil)
 
-	return call, nil
+	return client, call, nil
 }
