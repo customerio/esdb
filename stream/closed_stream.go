@@ -55,7 +55,11 @@ func (s *closedStream) ScanIndex(name, value string, offset int64, scanner Scann
 	if offset <= 0 {
 		val, err := s.index.Get([]byte(index))
 		if err != nil {
-			return err
+			if err.Error() == "not found" {
+				return nil
+			} else {
+				return err
+			}
 		}
 
 		b := bytes.NewReader(val)

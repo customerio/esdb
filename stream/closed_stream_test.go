@@ -42,15 +42,20 @@ func TestClosedScan(t *testing.T) {
 		{"d", "d", []string{"def", "cde"}},
 		{"e", "e", []string{"def", "cde"}},
 		{"f", "f", []string{"def"}},
+		{"g", "g", []string{}},
 	}
 
 	for i, test := range tests {
 		found := make([]string, 0)
 
-		s.ScanIndex(test.index, test.value, 0, func(e *Event) bool {
+		err := s.ScanIndex(test.index, test.value, 0, func(e *Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
+
+		if err != nil {
+			t.Errorf("Case #%v: found err: %v", i, err)
+		}
 
 		if !reflect.DeepEqual(found, test.events) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.events, found)
