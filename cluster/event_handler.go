@@ -31,6 +31,8 @@ func (n *Node) eventHandler(w http.ResponseWriter, req *http.Request) {
 		res["error"] = err.Error()
 	}
 
+	req.Body.Close()
+
 	js, _ := json.MarshalIndent(res, "", "  ")
 	w.Write(js)
 	w.Write([]byte("\n"))

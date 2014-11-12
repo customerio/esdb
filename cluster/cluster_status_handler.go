@@ -76,6 +76,8 @@ func ping(peer *raft.Peer) (*rpc.Call, error) {
 		return nil, err
 	}
 
+	defer client.Close()
+
 	state := new(NodeState)
 
 	call := client.Go("Node.State", NoArgs{}, state, nil)
