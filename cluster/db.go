@@ -36,9 +36,10 @@ var streamlock sync.Mutex
 
 func NewDb(path string) *DB {
 	db := &DB{
-		dir:    path,
-		wtimer: NilTimer{},
-		rtimer: NilTimer{},
+		dir:     path,
+		wtimer:  NilTimer{},
+		rtimer:  NilTimer{},
+		streams: make(map[uint64]stream.Stream),
 	}
 
 	db.Rotate(1, 0)
