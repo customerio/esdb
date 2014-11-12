@@ -344,7 +344,7 @@ func TestClose(t *testing.T) {
 		t.Errorf("Closed stream is not closed.")
 	}
 
-	s2 := reopenStream()
+	s = reopenStream()
 
 	var tests = []struct {
 		index  string
@@ -361,46 +361,26 @@ func TestClose(t *testing.T) {
 
 	for i, test := range tests {
 		found := make([]string, 0)
-		found2 := make([]string, 0)
 
 		s.ScanIndex(test.index, test.value, 0, func(e *Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
 
-		s2.ScanIndex(test.index, test.value, 0, func(e *Event) bool {
-			found2 = append(found2, string(e.Data))
-			return true
-		})
-
 		if !reflect.DeepEqual(found, test.events) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.events, found)
-		}
-
-		if !reflect.DeepEqual(found2, test.events) {
-			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.events, found2)
 		}
 	}
 
 	found := make([]string, 0)
-	found2 := make([]string, 0)
 
 	s.Iterate(0, func(e *Event) bool {
 		found = append(found, string(e.Data))
 		return true
 	})
 
-	s2.Iterate(0, func(e *Event) bool {
-		found2 = append(found2, string(e.Data))
-		return true
-	})
-
 	if !reflect.DeepEqual(found, []string{"abc", "cde", "def"}) {
 		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found)
-	}
-
-	if !reflect.DeepEqual(found2, []string{"abc", "cde", "def"}) {
-		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found2)
 	}
 }
 

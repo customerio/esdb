@@ -28,10 +28,11 @@ type DB struct {
 	wtimer     Timer
 	rtimer     Timer
 	stream     stream.Stream
+	streams    map[uint64]stream.Stream
 	raft       raft.Server
 }
 
-var slock sync.Mutex
+var streamlock sync.Mutex
 
 func NewDb(path string) *DB {
 	db := &DB{
@@ -304,26 +305,39 @@ func (db *DB) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream, e
 		return db.stream, nil
 	}
 
-	var s stream.Stream
-	var err error
-	var missing bool
+	if db.streams[commit] == nil {
+		streamlock.Lock()
+		defer streamlock.Unlock()
 
-	s, err = stream.Open(db.path(commit))
+		if db.streams[commit] == nil {
+			var s stream.Stream
+			var err error
+			var missing bool
 
-	if err != nil && strings.Contains(err.Error(), "no such file or directory") {
-		missing = true
+			s, err = stream.Open(db.path(commit))
+
+			if err != nil && strings.Contains(err.Error(), "no such file or directory") {
+				missing = true
+			}
+
+			if s != nil && !s.Closed() {
+				println("found open stream:", commit)
+				missing = true
+			}
+
+			if missing && fetchMissing {
+				s, err = RecoverStream(db.raft, db.dir, fmt.Sprintf("events.%024v.stream", commit))
+			}
+
+			if err != nil {
+				return nil, err
+			}
+
+			db.streams[commit] = s
+		}
 	}
 
-	if s != nil && !s.Closed() {
-		println("found open stream:", commit)
-		missing = true
-	}
-
-	if missing && fetchMissing {
-		return RecoverStream(db.raft, db.dir, fmt.Sprintf("events.%024v.stream", commit))
-	} else {
-		return s, err
-	}
+	return db.streams[commit], nil
 }
 
 func (db *DB) parseContinuation(continuation string, reverse bool) (uint64, int64) {

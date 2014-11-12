@@ -82,6 +82,10 @@ func (s *closedStream) Closed() bool {
 }
 
 func (s *closedStream) Close() error {
+	if closer, ok := s.stream.(io.Closer); ok {
+		return closer.Close()
+	}
+
 	return nil
 }
 

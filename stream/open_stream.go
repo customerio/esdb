@@ -194,6 +194,10 @@ func (s *openStream) Close() (err error) {
 		s.closed = true
 	}
 
+	if closer, ok := s.stream.(io.Closer); ok {
+		return closer.Close()
+	}
+
 	return
 }
 

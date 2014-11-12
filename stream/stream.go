@@ -34,6 +34,7 @@ func Open(path string) (Stream, error) {
 
 	file.Seek(-FOOTER_LENGTH, 2)
 	footer := binary.ReadBytes(file, FOOTER_LENGTH)
+	file.Close()
 
 	// 2 states a stream file can be in:
 	// Closed: if footer is present, no additional writes allowed, read-only.
