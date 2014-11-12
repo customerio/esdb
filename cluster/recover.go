@@ -36,7 +36,7 @@ func readStream(host, dir, file string) (stream.Stream, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, errors.New(fmt.Sprint("Non successfully response from host: ", resp.StatusCode))
+		return nil, errors.New(fmt.Sprint("Non successfully response from host: ", file, ": ", resp.StatusCode))
 	}
 
 	path := filepath.Join(dir, file)
