@@ -267,6 +267,35 @@ func TestContinueIterate(t *testing.T) {
 	}
 }
 
+func TestReopenWrite(t *testing.T) {
+	s := createStream()
+
+	s.Write([]byte("abc"), map[string]string{"a": "a", "b": "b", "c": "c"})
+	s.Write([]byte("cde"), map[string]string{"c": "c", "d": "d", "e": "e"})
+
+	s = reopenStream()
+
+	if s.Offset() > 0 {
+		t.Errorf("Reopened open stream immediately initialized with offset %v", s.Offset())
+	}
+
+	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
+
+	found := make([]string, 0)
+
+	s.Iterate(0, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		return true
+	})
+
+	if !reflect.DeepEqual(found, []string{"abc", "cde", "def"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found)
+	}
+	if s.Offset() <= 0 {
+		t.Errorf("Written open stream didn't initialize. Offset: %v", s.Offset())
+	}
+}
+
 func TestReopenScan(t *testing.T) {
 	s := createStream()
 
@@ -275,6 +304,10 @@ func TestReopenScan(t *testing.T) {
 	s.Write([]byte("def"), map[string]string{"d": "d", "e": "e", "f": "f"})
 
 	s = reopenStream()
+
+	if s.Offset() > 0 {
+		t.Errorf("Reopened open stream immediately initialized with offset %v", s.Offset())
+	}
 
 	var tests = []struct {
 		index  string
@@ -301,6 +334,10 @@ func TestReopenScan(t *testing.T) {
 			t.Errorf("Case #%v: wanted: %v, found: %v", i, test.events, found)
 		}
 	}
+
+	if s.Offset() <= 0 {
+		t.Errorf("Scanned open stream didn't initialize. Offset: %v", s.Offset())
+	}
 }
 
 func TestReopenIterate(t *testing.T) {
@@ -312,6 +349,10 @@ func TestReopenIterate(t *testing.T) {
 
 	s = reopenStream()
 
+	if s.Offset() > 0 {
+		t.Errorf("Reopened open stream immediately initialized with offset %v", s.Offset())
+	}
+
 	found := make([]string, 0)
 
 	s.Iterate(0, func(e *Event) bool {
@@ -321,6 +362,77 @@ func TestReopenIterate(t *testing.T) {
 
 	if !reflect.DeepEqual(found, []string{"abc", "cde", "def"}) {
 		t.Errorf("Wanted: %v, found: %v", []string{"abc", "cde", "def"}, found)
+	}
+
+	if s.Offset() > 0 {
+		t.Errorf("Iterating on reopened open stream initialized with offset %v", s.Offset())
+	}
+}
+
+func TestReopenContinueScan(t *testing.T) {
+	s := createStream()
+
+	s.Write([]byte("abc"), map[string]string{"a": "a"})
+	s.Write([]byte("cde"), map[string]string{"a": "a"})
+	s.Write([]byte("def"), map[string]string{"a": "a"})
+
+	var offset int64
+	found := make([]string, 0)
+
+	s = reopenStream()
+
+	if s.Offset() > 0 {
+		t.Errorf("Reopened open stream immediately initialized with offset %v", s.Offset())
+	}
+
+	s.ScanIndex("a", "a", offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		offset = e.Next("a", "a")
+		return false
+	})
+
+	if s.Offset() <= 0 {
+		t.Errorf("Scanned open stream didn't initialize. Offset: %v", s.Offset())
+	}
+
+	s = reopenStream()
+
+	if s.Offset() > 0 {
+		t.Errorf("Reopened open stream immediately initialized with offset %v", s.Offset())
+	}
+
+	s.ScanIndex("a", "a", offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		offset = e.Next("a", "a")
+		return false
+	})
+
+	if s.Offset() > 0 {
+		t.Errorf("Scanned open stream with offset initialized with offset %v", s.Offset())
+	}
+
+	s = reopenStream()
+
+	if s.Offset() > 0 {
+		t.Errorf("Reopened open stream immediately initialized with offset %v", s.Offset())
+	}
+
+	s.ScanIndex("a", "a", offset, func(e *Event) bool {
+		found = append(found, string(e.Data))
+		offset = e.Next("a", "a")
+		return false
+	})
+
+	if s.Offset() > 0 {
+		t.Errorf("Scanned open stream with offset initialized with offset %v", s.Offset())
+	}
+
+	if offset != 0 {
+		t.Errorf("Wanted offset: 0, found: %v", offset)
+	}
+
+	if !reflect.DeepEqual(found, []string{"def", "cde", "abc"}) {
+		t.Errorf("Wanted: %v, found: %v", []string{"def", "cde", "abc"}, found)
 	}
 }
 

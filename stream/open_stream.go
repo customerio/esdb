@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"sync"
 
 	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/sst"
@@ -14,11 +15,12 @@ import (
 var CORRUPTED_HEADER = errors.New("Incorrect stream file header.")
 
 type openStream struct {
-	stream io.ReadWriteSeeker
-	tails  map[string]int64
-	closed bool
-	offset int64
-	length int
+	stream   io.ReadWriteSeeker
+	tails    map[string]int64
+	closed   bool
+	offset   int64
+	length   int
+	initlock sync.Once
 }
 
 // Creates a new open stream at the given path. If the
@@ -63,15 +65,6 @@ func newOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
 	s := &openStream{stream: stream}
 
 	_, err := stream.Seek(0, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	tails, offset, length, err := populate(s.stream)
-
-	s.tails = tails
-	s.offset = offset
-	s.length = length
 
 	return s, err
 }
@@ -79,6 +72,10 @@ func newOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
 func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) {
 	if s.Closed() {
 		return 0, WRITING_TO_CLOSED_STREAM
+	}
+
+	if err := s.init(); err != nil {
+		return 0, err
 	}
 
 	_, err := s.stream.Seek(s.offset, 0)
@@ -127,6 +124,10 @@ func (s *openStream) ScanIndex(name, value string, offset int64, scanner Scanner
 	index := name + ":" + value
 
 	if offset <= 0 {
+		if err := s.init(); err != nil {
+			return err
+		}
+
 		offset = s.tails[index]
 	}
 
@@ -148,6 +149,11 @@ func (s *openStream) Closed() bool {
 func (s *openStream) Close() (err error) {
 	if s.Closed() {
 		return
+	}
+
+	err = s.init()
+	if err != nil {
+		return err
 	}
 
 	_, err = s.stream.Seek(s.offset, 0)
@@ -197,6 +203,22 @@ func (s *openStream) Close() (err error) {
 	if closer, ok := s.stream.(io.Closer); ok {
 		return closer.Close()
 	}
+
+	return
+}
+
+func (s *openStream) init() (e error) {
+	s.initlock.Do(func() {
+		tails, offset, length, err := populate(s.stream)
+
+		e = err
+
+		if e == nil {
+			s.tails = tails
+			s.offset = offset
+			s.length = length
+		}
+	})
 
 	return
 }
