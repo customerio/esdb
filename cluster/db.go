@@ -18,6 +18,10 @@ import (
 	"time"
 )
 
+const (
+	SNAPSHOT_BUFFER = 500
+)
+
 var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that's still open.")
 
 type DB struct {
@@ -259,6 +263,12 @@ func (db *DB) snapshot(index, term uint64) {
 	start := time.Now()
 
 	go (func() {
+		if index > SNAPSHOT_BUFFER {
+			index = index - SNAPSHOT_BUFFER
+		} else {
+			index = 0
+		}
+
 		if err := db.raft.TakeSnapshotFrom(index, term); err != nil {
 			panic(err)
 		}
