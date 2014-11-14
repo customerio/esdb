@@ -14,7 +14,7 @@ import (
 var WRITING_TO_CLOSED_STREAM = errors.New("stream has been closed")
 
 type closedStream struct {
-	stream io.ReadSeeker
+	stream io.ReaderAt
 	index  *sst.Reader
 }
 
@@ -33,7 +33,7 @@ func readonly(path string) (Stream, error) {
 	return newClosedStream(file)
 }
 
-func newClosedStream(stream io.ReadSeeker) (Stream, error) {
+func newClosedStream(stream *os.File) (Stream, error) {
 	index, err := findIndex(stream)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (s *closedStream) Close() error {
 	return nil
 }
 
-func findIndex(f io.ReadSeeker) (*sst.Reader, error) {
+func findIndex(f *os.File) (*sst.Reader, error) {
 	// The last 8 bytes in the file is the length
 	// of the SSTable spaces index.
 	f.Seek(-FOOTER_LENGTH-8, 2)

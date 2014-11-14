@@ -1,6 +1,7 @@
 package binary
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 )
@@ -23,6 +24,12 @@ func WriteInt16(w io.Writer, num int) {
 
 func WriteInt32(w io.Writer, num int) {
 	binary.Write(w, binary.LittleEndian, uint32(num))
+}
+
+func WriteInt32At(w io.WriterAt, num int, offset int64) {
+	buf := bytes.NewBuffer([]byte{})
+	binary.Write(buf, binary.LittleEndian, uint32(num))
+	w.WriteAt(buf.Bytes()[:4], offset)
 }
 
 func WriteInt64(w io.Writer, num int64) {

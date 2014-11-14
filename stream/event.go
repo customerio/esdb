@@ -75,9 +75,11 @@ func decodeEvent(b []byte) (*Event, error) {
 	return newEvent(data, offsets), nil
 }
 
-func pullEvent(r io.Reader) (*Event, error) {
-	if size := binary.ReadInt32(r); size > 0 {
-		data := binary.ReadBytes(r, size)
+func pullEvent(r io.ReaderAt, offset int64) (*Event, error) {
+	if size := binary.ReadInt32At(r, offset); size > 0 {
+		offset += 4
+
+		data := binary.ReadBytesAt(r, size, offset)
 
 		if len(data) < int(size) {
 			return nil, CORRUPTED_EVENT

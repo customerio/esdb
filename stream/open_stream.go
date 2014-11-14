@@ -15,7 +15,7 @@ import (
 var CORRUPTED_HEADER = errors.New("Incorrect stream file header.")
 
 type openStream struct {
-	stream   io.ReadWriteSeeker
+	stream   Streamer
 	tails    map[string]int64
 	closed   bool
 	offset   int64
@@ -40,16 +40,11 @@ func read(path string) (Stream, error) {
 		return nil, err
 	}
 
-	return newOpenStream(file)
+	return newOpenStream(file), nil
 }
 
-func createOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
-	_, err := stream.Seek(0, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	offset, err := stream.Write([]byte(MAGIC_HEADER))
+func createOpenStream(stream Streamer) (Stream, error) {
+	offset, err := stream.WriteAt([]byte(MAGIC_HEADER), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -61,12 +56,8 @@ func createOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
 	}, nil
 }
 
-func newOpenStream(stream io.ReadWriteSeeker) (Stream, error) {
-	s := &openStream{stream: stream}
-
-	_, err := stream.Seek(0, 0)
-
-	return s, err
+func newOpenStream(stream Streamer) Stream {
+	return &openStream{stream: stream}
 }
 
 func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) {
@@ -75,11 +66,6 @@ func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) 
 	}
 
 	if err := s.init(); err != nil {
-		return 0, err
-	}
-
-	_, err := s.stream.Seek(s.offset, 0)
-	if err != nil {
 		return 0, err
 	}
 
@@ -99,12 +85,12 @@ func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) 
 
 	buf := bytes.NewBuffer([]byte{})
 
-	_, err = event.push(buf)
+	_, err := event.push(buf)
 	if err != nil {
 		return 0, err
 	}
 
-	written, err := s.stream.Write(buf.Bytes())
+	written, err := s.stream.WriteAt(buf.Bytes(), s.offset)
 	if err != nil {
 		return 0, err
 	}
@@ -156,13 +142,9 @@ func (s *openStream) Close() (err error) {
 		return err
 	}
 
-	_, err = s.stream.Seek(s.offset, 0)
-	if err != nil {
-		return err
-	}
-
 	// Write nil event, to signal end of events.
-	binary.WriteInt32(s.stream, 0)
+	binary.WriteInt32At(s.stream, 0, s.offset)
+	s.offset += 4
 
 	indexes := make(sort.StringSlice, 0, len(s.tails))
 
@@ -195,7 +177,7 @@ func (s *openStream) Close() (err error) {
 	binary.WriteInt64(buf, int64(len(buf.Bytes())))
 	buf.Write([]byte(MAGIC_FOOTER))
 
-	_, err = buf.WriteTo(s.stream)
+	_, err = s.stream.WriteAt(buf.Bytes(), s.offset)
 	if err == nil {
 		s.closed = true
 	}
@@ -223,7 +205,7 @@ func (s *openStream) init() (e error) {
 	return
 }
 
-func populate(stream io.ReadSeeker) (tails map[string]int64, offset int64, length int, err error) {
+func populate(stream io.ReaderAt) (tails map[string]int64, offset int64, length int, err error) {
 	tails = make(map[string]int64)
 	offset = HEADER_LENGTH
 
