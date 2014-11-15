@@ -49,21 +49,13 @@ func newOpenStream(stream Streamer) Stream {
 	return &openStream{stream: stream}
 }
 
-func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) {
-	if s.Closed() {
-		return 0, WRITING_TO_CLOSED_STREAM
-	}
-
-	if err := s.init(); err != nil {
-		return 0, err
-	}
-
+func Serialize(data []byte, indexes map[string]string, tails map[string]int64) ([]byte, error) {
 	offsets := make(map[string]int64)
 
 	for name, value := range indexes {
 		index := name + ":" + value
 
-		if off, ok := s.tails[index]; ok {
+		if off, ok := tails[index]; ok {
 			offsets[index] = off
 		} else {
 			offsets[index] = 0
@@ -76,10 +68,27 @@ func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) 
 
 	_, err := event.push(buf)
 	if err != nil {
+		return []byte{}, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) {
+	if s.Closed() {
+		return 0, WRITING_TO_CLOSED_STREAM
+	}
+
+	if err := s.init(); err != nil {
 		return 0, err
 	}
 
-	written, err := s.stream.WriteAt(buf.Bytes(), s.offset)
+	bytes, err := Serialize(data, indexes, s.tails)
+	if err != nil {
+		return 0, err
+	}
+
+	written, err := s.stream.WriteAt(bytes, s.offset)
 	if err != nil {
 		return 0, err
 	}

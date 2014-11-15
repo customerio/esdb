@@ -33,6 +33,7 @@ type DB struct {
 	rtimer     Timer
 	stream     stream.Stream
 	streams    map[uint64]stream.Stream
+	mockoffset int64
 	raft       raft.Server
 }
 
@@ -54,20 +55,23 @@ func NewDb(path string) *DB {
 
 func (db *DB) Offset() int64 {
 	if db.stream == nil {
-		return 0
+		return db.mockoffset
 	} else {
 		return db.stream.Offset()
 	}
 }
 
 func (db *DB) Write(commit uint64, body []byte, indexes map[string]string, timestamp int64) error {
-	if db.current == 0 || commit <= db.current {
+	if commit <= db.current {
 		// old commit
 		return nil
 	}
 
 	if db.stream == nil {
-		log.Fatal(errors.New("No stream open."))
+		bytes, _ := stream.Serialize(body, indexes, map[string]int64{})
+		db.mockoffset += int64(len(bytes))
+		return nil
+
 	}
 
 	db.wtimer.Time(func() {
@@ -75,11 +79,11 @@ func (db *DB) Write(commit uint64, body []byte, indexes map[string]string, times
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		if timestamp > db.MostRecent {
-			db.MostRecent = timestamp
-		}
 	})
+
+	if timestamp > db.MostRecent {
+		db.MostRecent = timestamp
+	}
 
 	return nil
 }
@@ -93,7 +97,8 @@ func (db *DB) Rotate(commit, term uint64) error {
 	if s != nil && s.Closed() {
 		db.addClosed(commit)
 		db.stream = nil
-		db.current = 0
+		db.mockoffset = 10
+		db.current = commit
 	} else {
 		if db.stream != nil {
 			start := time.Now()
@@ -241,6 +246,7 @@ func (db *DB) addClosed(commit uint64) {
 
 func (db *DB) setCurrent(commit uint64) {
 	db.current = commit
+	db.mockoffset = 10
 
 	err := os.Remove(db.path(commit))
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
@@ -334,6 +340,7 @@ func (db *DB) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream, e
 			if s != nil && !s.Closed() {
 				println("found open stream:", commit)
 				missing = true
+				s = nil
 			}
 
 			if missing && fetchMissing {
