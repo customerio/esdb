@@ -3,6 +3,7 @@ package stream
 import (
 	"io"
 	"os"
+	"sync"
 
 	"github.com/customerio/esdb/binary"
 )
@@ -23,11 +24,15 @@ type Streamer interface {
 }
 
 type request struct {
+	reader io.ReaderAt
 	offset int64
 	event  *Event
 	err    error
 	done   chan request
 }
+
+var initQueue sync.Once
+var queue chan<- request
 
 type Stream interface {
 	Write(data []byte, indexes map[string]string) (int, error)
@@ -37,10 +42,24 @@ type Stream interface {
 	Closed() bool
 	Close() error
 	reader() io.ReaderAt
-	queue() chan<- request
+}
+
+// Creates a new open stream at the given path. If the
+// file already exists, an error will be returned.
+func New(path string) (Stream, error) {
+	setupReadQueue()
+
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0755)
+	if err != nil {
+		return nil, err
+	}
+
+	return createOpenStream(file)
 }
 
 func Open(path string) (Stream, error) {
+	setupReadQueue()
+
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -60,24 +79,26 @@ func Open(path string) (Stream, error) {
 	}
 }
 
-func setupReadQueue(s io.ReaderAt) chan<- request {
-	queue := make(chan request)
+func setupReadQueue() {
+	initQueue.Do(func() {
+		q := make(chan request)
 
-	go (func() {
-		for req := range queue {
-			req.event, req.err = pullEvent(s, req.offset)
-			req.done <- req
-		}
-	})()
+		go (func() {
+			for req := range q {
+				req.event, req.err = pullEvent(req.reader, req.offset)
+				req.done <- req
+			}
+		})()
 
-	return queue
+		queue = q
+	})
 }
 
-func scanIndex(queue chan<- request, index string, offset int64, scanner Scanner) error {
+func scanIndex(s Stream, index string, offset int64, scanner Scanner) error {
 	done := make(chan request)
 
 	for offset > 0 {
-		queue <- request{offset: offset, done: done}
+		queue <- request{reader: s.reader(), offset: offset, done: done}
 		req := <-done
 
 		if req.err == nil {
@@ -110,7 +131,7 @@ func iterate(s Stream, offset int64, scanner Scanner) (int64, error) {
 	var err error
 
 	for err == nil {
-		s.queue() <- request{offset: offset, done: done}
+		queue <- request{reader: s.reader(), offset: offset, done: done}
 		req := <-done
 
 		if req.err == nil {

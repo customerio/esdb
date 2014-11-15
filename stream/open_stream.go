@@ -21,18 +21,6 @@ type openStream struct {
 	offset   int64
 	length   int
 	initlock sync.Once
-	readq    chan<- request
-}
-
-// Creates a new open stream at the given path. If the
-// file already exists, an error will be returned.
-func New(path string) (Stream, error) {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0755)
-	if err != nil {
-		return nil, err
-	}
-
-	return createOpenStream(file)
 }
 
 func read(path string) (Stream, error) {
@@ -54,12 +42,11 @@ func createOpenStream(stream Streamer) (Stream, error) {
 		stream: stream,
 		tails:  make(map[string]int64),
 		offset: int64(offset),
-		readq:  setupReadQueue(stream),
 	}, nil
 }
 
 func newOpenStream(stream Streamer) Stream {
-	return &openStream{stream: stream, readq: setupReadQueue(stream)}
+	return &openStream{stream: stream}
 }
 
 func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) {
@@ -119,7 +106,7 @@ func (s *openStream) ScanIndex(name, value string, offset int64, scanner Scanner
 		offset = s.tails[index]
 	}
 
-	return scanIndex(s.readq, index, offset, scanner)
+	return scanIndex(s, index, offset, scanner)
 }
 
 func (s *openStream) Iterate(offset int64, scanner Scanner) (int64, error) {
@@ -136,10 +123,6 @@ func (s *openStream) Closed() bool {
 
 func (s *openStream) reader() io.ReaderAt {
 	return s.stream
-}
-
-func (s *openStream) queue() chan<- request {
-	return s.readq
 }
 
 func (s *openStream) Close() (err error) {
@@ -191,8 +174,6 @@ func (s *openStream) Close() (err error) {
 	if err == nil {
 		s.closed = true
 	}
-
-	close(s.readq)
 
 	if closer, ok := s.stream.(io.Closer); ok {
 		return closer.Close()
