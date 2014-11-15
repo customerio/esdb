@@ -21,6 +21,7 @@ type openStream struct {
 	offset   int64
 	length   int
 	initlock sync.Once
+	readq    chan<- request
 }
 
 // Creates a new open stream at the given path. If the
@@ -53,11 +54,12 @@ func createOpenStream(stream Streamer) (Stream, error) {
 		stream: stream,
 		tails:  make(map[string]int64),
 		offset: int64(offset),
+		readq:  setupReadQueue(stream),
 	}, nil
 }
 
 func newOpenStream(stream Streamer) Stream {
-	return &openStream{stream: stream}
+	return &openStream{stream: stream, readq: setupReadQueue(stream)}
 }
 
 func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) {
@@ -117,11 +119,11 @@ func (s *openStream) ScanIndex(name, value string, offset int64, scanner Scanner
 		offset = s.tails[index]
 	}
 
-	return scanIndex(s.stream, index, offset, scanner)
+	return scanIndex(s.readq, index, offset, scanner)
 }
 
 func (s *openStream) Iterate(offset int64, scanner Scanner) (int64, error) {
-	return iterate(s.stream, offset, scanner)
+	return iterate(s, offset, scanner)
 }
 
 func (s *openStream) Offset() int64 {
@@ -130,6 +132,14 @@ func (s *openStream) Offset() int64 {
 
 func (s *openStream) Closed() bool {
 	return s.closed
+}
+
+func (s *openStream) reader() io.ReaderAt {
+	return s.stream
+}
+
+func (s *openStream) queue() chan<- request {
+	return s.readq
 }
 
 func (s *openStream) Close() (err error) {
@@ -182,6 +192,8 @@ func (s *openStream) Close() (err error) {
 		s.closed = true
 	}
 
+	close(s.readq)
+
 	if closer, ok := s.stream.(io.Closer); ok {
 		return closer.Close()
 	}
@@ -191,7 +203,7 @@ func (s *openStream) Close() (err error) {
 
 func (s *openStream) init() (e error) {
 	s.initlock.Do(func() {
-		tails, offset, length, err := populate(s.stream)
+		tails, offset, length, err := populate(s)
 
 		e = err
 
@@ -205,11 +217,11 @@ func (s *openStream) init() (e error) {
 	return
 }
 
-func populate(stream io.ReaderAt) (tails map[string]int64, offset int64, length int, err error) {
+func populate(s *openStream) (tails map[string]int64, offset int64, length int, err error) {
 	tails = make(map[string]int64)
 	offset = HEADER_LENGTH
 
-	_, err = iterate(stream, 0, func(event *Event) bool {
+	_, err = iterate(s, 0, func(event *Event) bool {
 		for index, _ := range event.offsets {
 			tails[index] = offset
 		}

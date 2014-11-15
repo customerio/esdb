@@ -16,6 +16,7 @@ var WRITING_TO_CLOSED_STREAM = errors.New("stream has been closed")
 type closedStream struct {
 	stream io.ReaderAt
 	index  *sst.Reader
+	readq  chan<- request
 }
 
 func readonly(path string) (Stream, error) {
@@ -42,6 +43,7 @@ func newClosedStream(stream *os.File) (Stream, error) {
 	return &closedStream{
 		stream: stream,
 		index:  index,
+		readq:  setupReadQueue(stream),
 	}, nil
 }
 
@@ -66,11 +68,11 @@ func (s *closedStream) ScanIndex(name, value string, offset int64, scanner Scann
 		offset = binary.ReadUvarint(b)
 	}
 
-	return scanIndex(s.stream, index, offset, scanner)
+	return scanIndex(s.readq, index, offset, scanner)
 }
 
 func (s *closedStream) Iterate(offset int64, scanner Scanner) (int64, error) {
-	return iterate(s.stream, offset, scanner)
+	return iterate(s, offset, scanner)
 }
 
 func (s *closedStream) Offset() int64 {
@@ -82,11 +84,21 @@ func (s *closedStream) Closed() bool {
 }
 
 func (s *closedStream) Close() error {
+	close(s.readq)
+
 	if closer, ok := s.stream.(io.Closer); ok {
 		return closer.Close()
 	}
 
 	return nil
+}
+
+func (s *closedStream) reader() io.ReaderAt {
+	return s.stream
+}
+
+func (s *closedStream) queue() chan<- request {
+	return s.readq
 }
 
 func findIndex(f *os.File) (*sst.Reader, error) {

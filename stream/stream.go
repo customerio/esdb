@@ -22,6 +22,13 @@ type Streamer interface {
 	io.ReaderAt
 }
 
+type request struct {
+	offset int64
+	event  *Event
+	err    error
+	done   chan request
+}
+
 type Stream interface {
 	Write(data []byte, indexes map[string]string) (int, error)
 	ScanIndex(name, value string, offset int64, scanner Scanner) error
@@ -29,6 +36,8 @@ type Stream interface {
 	Offset() int64
 	Closed() bool
 	Close() error
+	reader() io.ReaderAt
+	queue() chan<- request
 }
 
 func Open(path string) (Stream, error) {
@@ -51,25 +60,43 @@ func Open(path string) (Stream, error) {
 	}
 }
 
-func scanIndex(stream io.ReaderAt, index string, offset int64, scanner Scanner) error {
-	for offset > 0 {
-		if event, err := pullEvent(stream, offset); err == nil {
-			offset = event.offsets[index]
+func setupReadQueue(s io.ReaderAt) chan<- request {
+	queue := make(chan request)
 
-			if !scanner(event) {
+	go (func() {
+		for req := range queue {
+			req.event, req.err = pullEvent(s, req.offset)
+			req.done <- req
+		}
+	})()
+
+	return queue
+}
+
+func scanIndex(queue chan<- request, index string, offset int64, scanner Scanner) error {
+	done := make(chan request)
+
+	for offset > 0 {
+		queue <- request{offset: offset, done: done}
+		req := <-done
+
+		if req.err == nil {
+			offset = req.event.offsets[index]
+
+			if !scanner(req.event) {
 				offset = 0
 			}
 		} else {
-			return err
+			return req.err
 		}
 	}
 
 	return nil
 }
 
-func iterate(stream io.ReaderAt, offset int64, scanner Scanner) (int64, error) {
+func iterate(s Stream, offset int64, scanner Scanner) (int64, error) {
 	if offset <= 0 {
-		header := binary.ReadBytesAt(stream, HEADER_LENGTH, 0)
+		header := binary.ReadBytesAt(s.reader(), HEADER_LENGTH, 0)
 
 		if string(header) != string(MAGIC_HEADER) {
 			return 0, CORRUPTED_HEADER
@@ -78,16 +105,22 @@ func iterate(stream io.ReaderAt, offset int64, scanner Scanner) (int64, error) {
 		offset = HEADER_LENGTH
 	}
 
-	var event *Event
+	done := make(chan request)
+
 	var err error
 
 	for err == nil {
-		if event, err = pullEvent(stream, offset); err == nil {
-			offset += int64(event.length())
+		s.queue() <- request{offset: offset, done: done}
+		req := <-done
 
-			if !scanner(event) {
+		if req.err == nil {
+			offset += int64(req.event.length())
+
+			if !scanner(req.event) {
 				err = io.EOF
 			}
+		} else {
+			err = req.err
 		}
 	}
 
