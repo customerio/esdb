@@ -96,6 +96,14 @@ func (n *Node) SetRotateTimer(t Timer) {
 	n.db.rtimer = t
 }
 
+func (n *Node) SetRotateThreshold(size int64) {
+	n.db.RotateThreshold = size
+}
+
+func (n *Node) SetSnapshotBuffer(count uint64) {
+	n.db.SnapshotBuffer = count
+}
+
 func (n *Node) Event(body []byte, indexes map[string]string) (err error) {
 	if n.raft == nil {
 		return errors.New("Raft not yet initialized")

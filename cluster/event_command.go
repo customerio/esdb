@@ -6,10 +6,6 @@ import (
 	"log"
 )
 
-const (
-	ROTATE_THRESHOLD = 536870912
-)
-
 type EventCommand struct {
 	Body      []byte            `json:"body"`
 	Indexes   map[string]string `json:"indexes"`
@@ -36,7 +32,7 @@ func (c *EventCommand) Apply(context raft.Context) (interface{}, error) {
 
 	err := db.Write(index, c.Body, c.Indexes, c.Timestamp)
 
-	if err == nil && db.Offset() > ROTATE_THRESHOLD {
+	if err == nil && db.Offset() > db.RotateThreshold {
 		err = db.Rotate(index, context.CurrentTerm())
 		if err != nil {
 			log.Fatal(err)

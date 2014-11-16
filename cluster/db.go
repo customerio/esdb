@@ -19,32 +19,37 @@ import (
 )
 
 const (
-	SNAPSHOT_BUFFER = 500
+	DEFAULT_ROTATE_THRESHOLD = 536870912
+	DEFAULT_SNAPSHOT_BUFFER  = 500
 )
 
 var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that's still open.")
 
 type DB struct {
-	dir        string
-	closed     []uint64
-	current    uint64
-	MostRecent int64
-	wtimer     Timer
-	rtimer     Timer
-	stream     stream.Stream
-	streams    map[uint64]stream.Stream
-	mockoffset int64
-	raft       raft.Server
+	dir             string
+	closed          []uint64
+	current         uint64
+	MostRecent      int64
+	RotateThreshold int64
+	SnapshotBuffer  uint64
+	wtimer          Timer
+	rtimer          Timer
+	stream          stream.Stream
+	streams         map[uint64]stream.Stream
+	mockoffset      int64
+	raft            raft.Server
 }
 
 var streamlock sync.Mutex
 
 func NewDb(path string) *DB {
 	db := &DB{
-		dir:     path,
-		wtimer:  NilTimer{},
-		rtimer:  NilTimer{},
-		streams: make(map[uint64]stream.Stream),
+		dir:             path,
+		wtimer:          NilTimer{},
+		rtimer:          NilTimer{},
+		streams:         make(map[uint64]stream.Stream),
+		RotateThreshold: DEFAULT_ROTATE_THRESHOLD,
+		SnapshotBuffer:  DEFAULT_SNAPSHOT_BUFFER,
 	}
 
 	db.Rotate(1, 0)
@@ -136,21 +141,17 @@ func (db *DB) Scan(name, value, continuation string, scanner stream.Scanner) (st
 
 		err = s.ScanIndex(name, value, offset, func(e *stream.Event) bool {
 			offset = e.Next(name, value)
-
-			if offset == 0 {
-				commit = db.prev(commit)
-			}
-
 			stopped = !scanner(e)
 			return !stopped
 		})
 
-		if offset == 0 {
-			commit = db.prev(commit)
-		}
-
 		if err != nil {
 			return "", err
+		}
+
+		if !stopped {
+			commit = db.prev(commit)
+			offset = 0
 		}
 	}
 
@@ -269,8 +270,8 @@ func (db *DB) snapshot(index, term uint64) {
 	start := time.Now()
 
 	go (func() {
-		if index > SNAPSHOT_BUFFER {
-			index = index - SNAPSHOT_BUFFER
+		if index > db.SnapshotBuffer {
+			index = index - db.SnapshotBuffer
 		} else {
 			index = 0
 		}
