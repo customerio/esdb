@@ -1,6 +1,10 @@
 package cluster
 
 import (
+	"github.com/customerio/esdb"
+	"github.com/customerio/esdb/stream"
+
+	"github.com/bitly/go-simplejson"
 	"github.com/jrallison/raft"
 
 	"errors"
@@ -11,6 +15,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -104,6 +110,72 @@ func (n *Node) SetSnapshotBuffer(count uint64) {
 	n.db.SnapshotBuffer = count
 }
 
+func (n *Node) Compress(start, stop uint64) error {
+	commits := make([]uint64, 0, len(n.db.closed))
+
+	for _, commit := range n.db.closed {
+		if commit >= start && commit <= stop {
+			commits = append(commits, commit)
+		}
+	}
+
+	writer, err := esdb.New(filepath.Join(n.path, "stream", fmt.Sprintf("events.%024v.esdb", start)))
+	if err != nil {
+		return err
+	}
+
+	for _, commit := range commits {
+		s, err := n.db.retrieveStream(commit, true)
+		if err != nil {
+			return err
+		}
+
+		s.Iterate(0, func(e *stream.Event) bool {
+			js, err := simplejson.NewJson(e.Data)
+			if err != nil {
+				panic(err)
+			}
+
+			timestamp := js.Get("timestamp").MustInt()
+			writer.Add([]byte{}, e.Data, timestamp, "", e.Indexes())
+
+			return true
+		})
+	}
+
+	return writer.Write()
+}
+
+func (n *Node) CleanupStreams() error {
+	commits := make(map[uint64]bool)
+
+	commits[n.db.current] = true
+
+	for _, commit := range n.db.closed {
+		commits[commit] = true
+	}
+
+	return filepath.Walk(filepath.Join(n.path, "stream"), func(path string, f os.FileInfo, err error) error {
+		if !strings.HasSuffix(path, ".stream") {
+			return nil
+		}
+
+		part := strings.Replace(path, filepath.Join(n.path, "stream", "events."), "", 1)
+		part = strings.Replace(part, ".stream", "", 1)
+
+		commit, err := strconv.ParseInt(part, 10, 64)
+		if err != nil {
+			return err
+		}
+
+		if !commits[uint64(commit)] {
+			return os.Remove(path)
+		}
+
+		return nil
+	})
+}
+
 func (n *Node) Event(body []byte, indexes map[string]string) (err error) {
 	if n.raft == nil {
 		return errors.New("Raft not yet initialized")
@@ -111,6 +183,20 @@ func (n *Node) Event(body []byte, indexes map[string]string) (err error) {
 
 	if n.raft.State() == "leader" {
 		_, err = n.raft.Do(NewEventCommand(body, indexes, time.Now().UnixNano()))
+	} else {
+		err = NOT_LEADER_ERROR
+	}
+
+	return
+}
+
+func (n *Node) Archive(start, stop uint64) (err error) {
+	if n.raft == nil {
+		return errors.New("Raft not yet initialized")
+	}
+
+	if n.raft.State() == "leader" {
+		_, err = n.raft.Do(NewArchiveCommand(start, stop))
 	} else {
 		err = NOT_LEADER_ERROR
 	}

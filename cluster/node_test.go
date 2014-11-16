@@ -25,13 +25,17 @@ func withNode(perform func(n *Node)) {
 	node.Stop()
 }
 
+func trackevent(n *Node, data []byte, indexes map[string]string) {
+	n.Event(data, indexes)
+}
+
 func TestScanningWithoutRotations(t *testing.T) {
 	withNode(func(n *Node) {
 		n.SetRotateThreshold(100000000)
 
-		n.Event([]byte("a"), map[string]string{"a": "b"})
-		n.Event([]byte("b"), map[string]string{"a": "b"})
-		n.Event([]byte("c"), map[string]string{"a": "b"})
+		trackevent(n, []byte("a"), map[string]string{"a": "b"})
+		trackevent(n, []byte("b"), map[string]string{"a": "b"})
+		trackevent(n, []byte("c"), map[string]string{"a": "b"})
 
 		found := make([]string, 0)
 
@@ -50,9 +54,9 @@ func TestScanningWithRotations(t *testing.T) {
 	withNode(func(n *Node) {
 		n.SetRotateThreshold(1)
 
-		n.Event([]byte("a"), map[string]string{"a": "b"})
-		n.Event([]byte("b"), map[string]string{"a": "b"})
-		n.Event([]byte("c"), map[string]string{"a": "b"})
+		trackevent(n, []byte("a"), map[string]string{"a": "b"})
+		trackevent(n, []byte("b"), map[string]string{"a": "b"})
+		trackevent(n, []byte("c"), map[string]string{"a": "b"})
 
 		found := make([]string, 0)
 
@@ -71,9 +75,9 @@ func TestIteratingWithoutRotations(t *testing.T) {
 	withNode(func(n *Node) {
 		n.SetRotateThreshold(100000000)
 
-		n.Event([]byte("a"), map[string]string{"a": "b"})
-		n.Event([]byte("b"), map[string]string{"a": "b"})
-		n.Event([]byte("c"), map[string]string{"a": "b"})
+		trackevent(n, []byte("a"), map[string]string{"a": "b"})
+		trackevent(n, []byte("b"), map[string]string{"a": "b"})
+		trackevent(n, []byte("c"), map[string]string{"a": "b"})
 
 		found := make([]string, 0)
 
@@ -92,9 +96,9 @@ func TestIteratingWithRotations(t *testing.T) {
 	withNode(func(n *Node) {
 		n.SetRotateThreshold(1)
 
-		n.Event([]byte("a"), map[string]string{"a": "b"})
-		n.Event([]byte("b"), map[string]string{"a": "b"})
-		n.Event([]byte("c"), map[string]string{"a": "b"})
+		trackevent(n, []byte("a"), map[string]string{"a": "b"})
+		trackevent(n, []byte("b"), map[string]string{"a": "b"})
+		trackevent(n, []byte("c"), map[string]string{"a": "b"})
 
 		found := make([]string, 0)
 

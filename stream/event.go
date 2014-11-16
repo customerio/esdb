@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/customerio/esdb/binary"
 )
@@ -21,6 +22,17 @@ func newEvent(data []byte, offsets map[string]int64) *Event {
 
 func (e *Event) Next(name, value string) int64 {
 	return e.offsets[name+":"+value]
+}
+
+func (e *Event) Indexes() map[string]string {
+	indexes := make(map[string]string)
+
+	for name, _ := range e.offsets {
+		parts := strings.SplitN(name, ":", 2)
+		indexes[parts[0]] = parts[1]
+	}
+
+	return indexes
 }
 
 // Events are encoded in the following byte format:

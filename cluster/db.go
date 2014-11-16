@@ -27,6 +27,7 @@ var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that's still open.")
 
 type DB struct {
 	dir             string
+	archived        []uint64
 	closed          []uint64
 	current         uint64
 	MostRecent      int64
@@ -185,6 +186,19 @@ func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, erro
 	}
 
 	return buildContinuation(commit, offset), nil
+}
+
+func (db *DB) Archive(start, stop uint64) {
+	newclosed := make([]uint64, 0, len(db.closed))
+
+	for _, commit := range db.closed {
+		if commit < start || commit > stop {
+			newclosed = append(newclosed, commit)
+		}
+	}
+
+	db.archived = append(db.archived, start)
+	db.closed = newclosed
 }
 
 func (db *DB) SaveAt(index, term uint64) ([]byte, error) {
