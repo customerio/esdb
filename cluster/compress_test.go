@@ -103,10 +103,14 @@ func TestCompression(t *testing.T) {
 
 		found := make([]string, 0)
 
-		n.db.Scan("a", "b", "", func(e *stream.Event) bool {
+		_, err := n.db.Scan("a", "b", "", func(e *stream.Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
+
+		if err != nil {
+			t.Errorf("Error iterating results: %v", err)
+		}
 
 		expected := make([]string, 0)
 		for i := 0; i < 500; i++ {
@@ -119,10 +123,14 @@ func TestCompression(t *testing.T) {
 
 		found = make([]string, 0)
 
-		n.db.Iterate("", func(e *stream.Event) bool {
+		_, err = n.db.Iterate("", func(e *stream.Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
+
+		if err != nil {
+			t.Errorf("Error iterating results: %v", err)
+		}
 
 		expected = make([]string, 0)
 		for i := 0; i < 500; i++ {
@@ -130,7 +138,7 @@ func TestCompression(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(found, expected) {
-			t.Errorf("Incorrect stream results. Wanted: %v, found: %v", expected, found)
+			t.Errorf("Incorrect iterate results. Wanted: %v, found: %v", expected, found)
 		}
 	})
 }

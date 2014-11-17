@@ -62,7 +62,7 @@ func Serialize(data []byte, indexes map[string]string, tails map[string]int64) (
 		}
 	}
 
-	event := newEvent(data, offsets)
+	event := NewEvent(data, offsets)
 
 	buf := bytes.NewBuffer([]byte{})
 

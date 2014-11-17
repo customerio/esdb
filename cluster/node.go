@@ -137,7 +137,7 @@ func (n *Node) Compress(start, stop uint64) error {
 			}
 
 			timestamp := js.Get("timestamp").MustInt()
-			writer.Add([]byte{}, e.Data, timestamp, "", e.Indexes())
+			writer.Add([]byte("a"), e.Data, timestamp, "", e.Indexes())
 
 			return true
 		})

@@ -16,7 +16,7 @@ type Event struct {
 	offsets map[string]int64
 }
 
-func newEvent(data []byte, offsets map[string]int64) *Event {
+func NewEvent(data []byte, offsets map[string]int64) *Event {
 	return &Event{Data: data, offsets: offsets}
 }
 
@@ -84,7 +84,7 @@ func decodeEvent(b []byte) (*Event, error) {
 		offsets[name] = offset
 	}
 
-	return newEvent(data, offsets), nil
+	return NewEvent(data, offsets), nil
 }
 
 func pullEvent(r io.ReaderAt, offset int64) (*Event, error) {

@@ -8,7 +8,10 @@ import (
 func (n *Node) closedEventsHandler(w http.ResponseWriter, req *http.Request) {
 	req.Body.Close()
 
-	res := map[string]interface{}{"closed": n.db.closed}
+	res := map[string]interface{}{
+		"archived": n.db.archived,
+		"closed":   n.db.closed,
+	}
 
 	js, _ := json.MarshalIndent(res, "", "  ")
 	w.Write(js)
