@@ -137,33 +137,43 @@ func (db *DB) Scan(name, value, continuation string, scanner stream.Scanner) (st
 
 	commit, offset, archive := db.parseContinuation(continuation, true)
 
-	for !archive && !stopped && commit > 0 {
-		s, err := db.retrieveStream(commit, true)
-		if err != nil {
-			return "", err
+	if !archive {
+		for !stopped && commit > 0 {
+			s, err := db.retrieveStream(commit, true)
+			if err != nil {
+				return "", err
+			}
+
+			err = s.ScanIndex(name, value, offset, func(e *stream.Event) bool {
+				offset = e.Next(name, value)
+				stopped = !scanner(e)
+				return !stopped
+			})
+
+			if err != nil {
+				return "", err
+			}
+
+			if !stopped {
+				commit = db.prev(commit)
+				offset = 0
+			}
 		}
 
-		err = s.ScanIndex(name, value, offset, func(e *stream.Event) bool {
-			offset = e.Next(name, value)
-			stopped = !scanner(e)
-			return !stopped
-		})
+		if stopped {
+			if offset == 0 {
+				commit = db.prev(commit)
+			}
 
-		if err != nil {
-			return "", err
+			if commit == 0 {
+				return buildContinuation(db.prevArchive(math.MaxUint64), 0, true), nil
+			} else {
+				return buildContinuation(commit, offset, false), nil
+			}
 		}
 
-		if !stopped {
-			commit = db.prev(commit)
-			offset = 0
-		}
+		commit = db.prevArchive(math.MaxUint64)
 	}
-
-	if stopped {
-		return buildContinuation(commit, offset, false), nil
-	}
-
-	commit = db.prevArchive(math.MaxUint64)
 
 	for !stopped && commit > 0 {
 		d, err := db.retrieveArchive(commit)
@@ -214,11 +224,15 @@ func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, erro
 				})
 			}
 
-			if stopped {
-				return buildContinuation(commit, 0, true), nil
-			}
-
 			commit = db.nextArchive(commit)
+
+			if stopped {
+				if commit == 0 {
+					return buildContinuation(db.next(0), 0, false), nil
+				} else {
+					return buildContinuation(commit, 0, true), nil
+				}
+			}
 		}
 
 		commit = db.next(0)
@@ -258,7 +272,7 @@ func (db *DB) Archive(start, stop uint64) {
 		}
 	}
 
-	db.archived = append(db.archived, start)
+	db.addArchived(start)
 	db.closed = newclosed
 }
 
@@ -278,6 +292,12 @@ func (db *DB) Save() ([]byte, error) {
 		binary.WriteInt64(buf, int64(commit))
 	}
 
+	binary.WriteUvarint(buf, len(db.archived))
+
+	for _, commit := range db.archived {
+		binary.WriteInt64(buf, int64(commit))
+	}
+
 	return buf.Bytes(), nil
 }
 
@@ -291,6 +311,12 @@ func (db *DB) Recovery(b []byte) error {
 
 	for i := 0; i < count; i++ {
 		db.addClosed(uint64(binary.ReadInt64(buf)))
+	}
+
+	count = int(binary.ReadUvarint(buf))
+
+	for i := 0; i < count; i++ {
+		db.addArchived(uint64(binary.ReadInt64(buf)))
 	}
 
 	return nil
@@ -322,6 +348,16 @@ func (db *DB) addClosed(commit uint64) {
 	}
 
 	db.closed = append(db.closed, commit)
+}
+
+func (db *DB) addArchived(commit uint64) {
+	for _, existing := range db.archived {
+		if existing == commit {
+			return
+		}
+	}
+
+	db.archived = append(db.archived, commit)
 }
 
 func (db *DB) setCurrent(commit uint64) {

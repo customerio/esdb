@@ -30,10 +30,6 @@ func Connect(n *Node, existing string) error {
 		log.Println("Recovered from log")
 	}
 
-	if err == nil {
-		err = n.db.RecoverStreams()
-	}
-
 	return err
 }
 
