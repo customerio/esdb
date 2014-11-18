@@ -20,7 +20,8 @@ func NewRestServer(n *Node) *RestServer {
 	n.HandleFunc("/cluster/remove/", n.clusterRemoveHandler)
 
 	n.HandleFunc("/events", n.eventHandler)
-	n.HandleFunc("/events/closed", n.closedEventsHandler)
+	n.HandleFunc("/events/meta", n.metaEventsHandler)
+	n.HandleFunc("/events/archive/", n.archiveEventsHandler)
 
 	n.HandleFunc("/stream/", n.recoverHandler)
 

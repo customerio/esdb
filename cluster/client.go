@@ -3,8 +3,10 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -13,6 +15,10 @@ type Client struct {
 	Nodes  []string
 	Leader string
 	quit   bool
+}
+
+type LocalClient struct {
+	Node string
 }
 
 func NewClient(node string) *Client {
@@ -34,6 +40,53 @@ func NewClient(node string) *Client {
 	})()
 
 	return c
+}
+
+func NewLocalClient(node string) *LocalClient {
+	return &LocalClient{Node: node}
+}
+
+func (c *LocalClient) StreamsMetadata() (*Metadata, error) {
+	resp, err := http.Get(c.Node + "/events/meta")
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var meta Metadata
+	err = json.Unmarshal(body, &meta)
+	return &meta, err
+}
+
+func (c *Client) Archive(start, stop uint64) error {
+	reader := strings.NewReader("")
+	resp, err := http.Post(c.Leader+"/events/archive/"+strconv.FormatUint(start, 10)+"/"+strconv.FormatUint(stop, 10), "application/json", reader)
+	if err != nil {
+		if len(c.Nodes) == 1 && c.Nodes[0] == c.Leader {
+			return err
+		}
+
+		c.Leader = c.Nodes[rand.Intn(len(c.Nodes))]
+		fmt.Println("error when connecting to leader", err, "switching to", c.Leader)
+		return c.Archive(start, stop)
+	}
+
+	defer resp.Body.Close()
+
+	leader := resp.Header.Get("Cluster-Leader")
+
+	if resp.StatusCode == 400 && leader != "" {
+		c.Leader = leader
+		return c.Archive(start, stop)
+	}
+
+	return nil
 }
 
 func (c *Client) Event(content []byte, indexes map[string]string) error {

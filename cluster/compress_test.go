@@ -83,11 +83,11 @@ func TestCompression(t *testing.T) {
 			t.Errorf("Incorrect committed streams. Wanted: %v, found: %v", expectedCommits, streamCommits())
 		}
 
-		n.Compress(1, 291)
+		Compress("tmp/teststream", 1, 291, n.db.closed)
 		n.Archive(1, 291)
-		n.Compress(292, 490)
+		Compress("tmp/teststream", 292, 490, n.db.closed)
 		n.Archive(292, 490)
-		n.CleanupStreams()
+		Cleanup("tmp/teststream", n.db.current, n.db.closed)
 
 		expectedCommits = []int{491, 492, 493, 494, 495, 496, 497, 498, 499, 500, 501, 502}
 

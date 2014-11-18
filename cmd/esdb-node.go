@@ -17,6 +17,7 @@ var debug = flag.Bool("debug", false, "Raft debugging")
 var host = flag.String("h", "localhost", "hostname")
 var port = flag.Int("p", 4001, "port")
 var join = flag.String("join", "", "host:port of node in a cluster to join")
+var rotate = flag.Int("r", cluster.DEFAULT_ROTATE_THRESHOLD, "rotation threshold in # bytes")
 
 func init() {
 	flag.Usage = func() {
@@ -55,6 +56,11 @@ func main() {
 	log.SetFlags(log.LstdFlags)
 
 	n := cluster.NewNode(path, *host, *port)
+
+	if *rotate > 0 && *rotate != cluster.DEFAULT_ROTATE_THRESHOLD {
+		log.Println("Setting rotation threshold to:", *rotate)
+		n.SetRotateThreshold(int64(*rotate))
+	}
 
 	log.Fatal(n.Start(*join))
 }
