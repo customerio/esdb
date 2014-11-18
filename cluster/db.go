@@ -132,6 +132,16 @@ func (db *DB) Rotate(commit, term uint64) error {
 	return nil
 }
 
+func (db *DB) Continuation(name, value string) string {
+	if db.stream != nil {
+		if offset, err := db.stream.First(name, value); err == nil && offset > 0 {
+			return buildContinuation(db.current, offset, false)
+		}
+	}
+
+	return buildContinuation(db.prev(math.MaxUint64), 0, false)
+}
+
 func (db *DB) Scan(name, value, continuation string, scanner stream.Scanner) (string, error) {
 	var stopped bool
 

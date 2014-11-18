@@ -36,6 +36,7 @@ var queue chan<- request
 
 type Stream interface {
 	Write(data []byte, indexes map[string]string) (int, error)
+	First(name, value string) (int64, error)
 	ScanIndex(name, value string, offset int64, scanner Scanner) error
 	Iterate(offset int64, scanner Scanner) (int64, error)
 	Offset() int64

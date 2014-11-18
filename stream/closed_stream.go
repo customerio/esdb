@@ -49,21 +49,31 @@ func (s *closedStream) Write(data []byte, indexes map[string]string) (int, error
 	return 0, WRITING_TO_CLOSED_STREAM
 }
 
-func (s *closedStream) ScanIndex(name, value string, offset int64, scanner Scanner) error {
+func (s *closedStream) First(name, value string) (int64, error) {
+	index := name + ":" + value
+
+	val, err := s.index.Get([]byte(index))
+
+	if err != nil {
+		if err.Error() == "not found" {
+			return 0, nil
+		} else {
+			return 0, err
+		}
+	}
+
+	b := bytes.NewReader(val)
+	return binary.ReadUvarint(b), nil
+}
+
+func (s *closedStream) ScanIndex(name, value string, offset int64, scanner Scanner) (err error) {
 	index := name + ":" + value
 
 	if offset <= 0 {
-		val, err := s.index.Get([]byte(index))
+		offset, err = s.First(name, value)
 		if err != nil {
-			if err.Error() == "not found" {
-				return nil
-			} else {
-				return err
-			}
+			return
 		}
-
-		b := bytes.NewReader(val)
-		offset = binary.ReadUvarint(b)
 	}
 
 	return scanIndex(s, index, offset, scanner)

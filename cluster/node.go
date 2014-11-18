@@ -37,6 +37,12 @@ type NodeState struct {
 	Uri    string `json:"uri"`
 }
 
+type Metadata struct {
+	Archived []uint64 `json:"archived"`
+	Closed   []uint64 `json:"closed"`
+	Current  uint64   `json:"current"`
+}
+
 func NewNode(path, host string, port int) (n *Node) {
 	if err := os.MkdirAll(filepath.Join(path, "stream"), 0744); err != nil {
 		log.Fatalf("Unable to create stream directory: %v", err)
@@ -146,6 +152,14 @@ func (n *Node) State() NodeState {
 		n.raft.CommitIndex(),
 		n.path,
 		fmt.Sprintf("http://%s:%d", n.host, n.port),
+	}
+}
+
+func (n *Node) Metadata() Metadata {
+	return Metadata{
+		Archived: n.db.archived,
+		Closed:   n.db.closed,
+		Current:  n.db.current,
 	}
 }
 

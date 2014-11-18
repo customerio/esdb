@@ -104,15 +104,24 @@ func (s *openStream) Write(data []byte, indexes map[string]string) (int, error) 
 	return written, nil
 }
 
-func (s *openStream) ScanIndex(name, value string, offset int64, scanner Scanner) error {
+func (s *openStream) First(name, value string) (offset int64, err error) {
+	index := name + ":" + value
+
+	if err = s.init(); err == nil {
+		offset = s.tails[index]
+	}
+
+	return
+}
+
+func (s *openStream) ScanIndex(name, value string, offset int64, scanner Scanner) (err error) {
 	index := name + ":" + value
 
 	if offset <= 0 {
-		if err := s.init(); err != nil {
-			return err
+		offset, err = s.First(name, value)
+		if err != nil {
+			return
 		}
-
-		offset = s.tails[index]
 	}
 
 	return scanIndex(s, index, offset, scanner)
