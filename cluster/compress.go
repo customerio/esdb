@@ -56,6 +56,18 @@ func Compress(dbpath string, start, stop uint64, closed []uint64) error {
 	return writer.Write()
 }
 
+func Merge(dbpath string, start, stop uint64, closed []uint64) error {
+	paths := make([]string, 0, len(closed))
+
+	for _, commit := range closed {
+		if commit >= start && commit <= stop {
+			paths = append(paths, filepath.Join(dbpath, "stream", fmt.Sprintf("events.%024v.stream", commit)))
+		}
+	}
+
+	return stream.Merge(filepath.Join(dbpath, "stream", fmt.Sprintf("events.%024v.tmpstream", start)), paths)
+}
+
 func Cleanup(dbpath string, current uint64, closed []uint64) error {
 	commits := map[uint64]bool{current: true}
 
