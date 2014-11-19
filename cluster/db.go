@@ -62,7 +62,6 @@ func (db *DB) Offset() int64 {
 
 func (db *DB) setRaft(r raft.Server) {
 	db.raft = r
-	db.reader.raft = r
 }
 
 func (db *DB) Write(commit uint64, body []byte, indexes map[string]string, timestamp int64) error {

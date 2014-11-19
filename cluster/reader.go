@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"github.com/customerio/esdb/stream"
-	"github.com/jrallison/raft"
 
 	"fmt"
 	"math"
@@ -19,7 +18,6 @@ type Reader struct {
 	peers   []string
 	streams map[uint64]stream.Stream
 	mutexes map[uint64]*sync.Mutex
-	raft    raft.Server
 }
 
 func NewReader(path string) *Reader {
