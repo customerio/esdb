@@ -40,7 +40,7 @@ type DB struct {
 	raft            raft.Server
 }
 
-var streamlock sync.RWMutex
+var streamlocks map[uint64]*sync.Mutex
 
 func NewDb(path string) *DB {
 	db := &DB{
@@ -202,19 +202,21 @@ func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, erro
 }
 
 func (db *DB) Compress(start, stop uint64) {
-	streamlock.Lock()
-	defer streamlock.Unlock()
-
 	newclosed := make([]uint64, 0, len(db.closed))
 
 	for _, commit := range db.closed {
 		if commit <= start || commit > stop {
 			newclosed = append(newclosed, commit)
 		} else {
+
+			mutex(commit).Lock()
+			defer mutex(commit).Unlock()
 			db.forgetStream(commit)
 		}
 	}
 
+	mutex(start).Lock()
+	defer mutex(start).Unlock()
 	db.forgetStream(start)
 
 	if _, err := os.Open(db.compressedpath(start)); !os.IsNotExist(err) {
@@ -352,6 +354,9 @@ func (db *DB) next(commit uint64) uint64 {
 }
 
 func (db *DB) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream, error) {
+	mutex(commit).Lock()
+	defer mutex(commit).Unlock()
+
 	if db.current == commit && db.stream != nil {
 		return db.stream, nil
 	}
@@ -359,9 +364,6 @@ func (db *DB) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream, e
 	if db.streams[commit] == nil {
 		var err error
 		(func() {
-			streamlock.Lock()
-			defer streamlock.Unlock()
-
 			if db.streams[commit] == nil {
 				var s stream.Stream
 				var missing bool
@@ -393,14 +395,27 @@ func (db *DB) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream, e
 		}
 	}
 
-	streamlock.RLock()
-	defer streamlock.RUnlock()
-
 	return db.streams[commit], nil
 }
 
 func (db *DB) forgetStream(commit uint64) {
+	if db.streams[commit] != nil {
+		db.streams[commit].Close()
+	}
+
 	delete(db.streams, commit)
+}
+
+func mutex(commit uint64) *sync.Mutex {
+	if streamlocks == nil {
+		streamlocks = make(map[uint64]*sync.Mutex)
+	}
+
+	if streamlocks[commit] == nil {
+		streamlocks[commit] = &sync.Mutex{}
+	}
+
+	return streamlocks[commit]
 }
 
 func (db *DB) parseContinuation(continuation string, reverse bool) (uint64, int64) {
