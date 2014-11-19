@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"github.com/customerio/esdb/stream"
-	"github.com/jrallison/raft"
 
 	"errors"
 	"fmt"
@@ -13,9 +12,9 @@ import (
 	"path/filepath"
 )
 
-func RecoverStream(r raft.Server, dir, file string) (stream.Stream, error) {
-	for _, node := range r.Peers() {
-		if s, err := readStream(node.ConnectionString, dir, file); err == nil {
+func RecoverStream(peers []string, dir, file string) (stream.Stream, error) {
+	for _, peer := range peers {
+		if s, err := readStream(peer, dir, file); err == nil {
 			return s, err
 		} else {
 			log.Println("RECOVER STREAM: Error", err)

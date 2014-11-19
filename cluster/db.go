@@ -7,14 +7,10 @@ import (
 
 	"bytes"
 	"errors"
-	"fmt"
 	"log"
 	"math"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -27,6 +23,7 @@ var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that's still open.")
 
 type DB struct {
 	dir             string
+	reader          *Reader
 	closed          []uint64
 	current         uint64
 	MostRecent      int64
@@ -35,19 +32,16 @@ type DB struct {
 	wtimer          Timer
 	rtimer          Timer
 	stream          stream.Stream
-	streams         map[uint64]stream.Stream
 	mockoffset      int64
 	raft            raft.Server
 }
 
-var streamlocks map[uint64]*sync.Mutex
-
 func NewDb(path string) *DB {
 	db := &DB{
 		dir:             path,
+		reader:          NewReader(path),
 		wtimer:          NilTimer{},
 		rtimer:          NilTimer{},
-		streams:         make(map[uint64]stream.Stream),
 		RotateThreshold: DEFAULT_ROTATE_THRESHOLD,
 		SnapshotBuffer:  DEFAULT_SNAPSHOT_BUFFER,
 	}
@@ -64,6 +58,11 @@ func (db *DB) Offset() int64 {
 	} else {
 		return db.stream.Offset()
 	}
+}
+
+func (db *DB) setRaft(r raft.Server) {
+	db.raft = r
+	db.reader.raft = r
 }
 
 func (db *DB) Write(commit uint64, body []byte, indexes map[string]string, timestamp int64) error {
@@ -128,77 +127,25 @@ func (db *DB) Rotate(commit, term uint64) error {
 	return nil
 }
 
-func (db *DB) Continuation(name, value string) string {
-	if db.stream != nil {
-		if offset, err := db.stream.First(name, value); err == nil && offset > 0 {
-			return buildContinuation(db.current, offset)
-		}
-	}
-
-	return buildContinuation(db.prev(math.MaxUint64), 0)
-}
-
 func (db *DB) Scan(name, value, continuation string, scanner stream.Scanner) (string, error) {
-	var stopped bool
-
-	commit, offset := db.parseContinuation(continuation, true)
-
-	for !stopped && commit > 0 {
-		s, err := db.retrieveStream(commit, true)
-		if err != nil {
-			return "", err
-		}
-
-		err = s.ScanIndex(name, value, offset, func(e *stream.Event) bool {
-			offset = e.Next(name, value)
-			stopped = !scanner(e)
-			return !stopped
-		})
-
-		if err != nil {
-			return "", err
-		}
-
-		if !stopped {
-			commit = db.prev(commit)
-			offset = 0
-		}
-	}
-
-	if stopped && offset == 0 {
-		commit = db.prev(commit)
-	}
-
-	return buildContinuation(commit, 0), nil
+	db.reader.Update(db.peerConnectionStrings(), db.closed, db.current)
+	return db.reader.Scan(name, value, continuation, scanner)
 }
 
 func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, error) {
-	var stopped bool
+	db.reader.Update(db.peerConnectionStrings(), db.closed, db.current)
+	return db.reader.Iterate(continuation, scanner)
+}
 
-	commit, offset := db.parseContinuation(continuation, false)
-
-	for !stopped && commit > 0 {
-		s, err := db.retrieveStream(commit, true)
-		if err != nil {
-			return "", err
-		}
-
-		offset, err = s.Iterate(offset, func(e *stream.Event) bool {
-			stopped = !scanner(e)
-			return !stopped
-		})
-
-		if err != nil {
-			return "", err
-		}
-
-		if !stopped {
-			commit = db.next(commit)
-			offset = 0
+func (db *DB) Continuation(name, value string) string {
+	if db.stream != nil {
+		if offset, err := db.stream.First(name, value); err == nil && offset > 0 {
+			return db.reader.buildContinuation(db.current, offset)
 		}
 	}
 
-	return buildContinuation(commit, offset), nil
+	db.reader.Update(db.peerConnectionStrings(), db.closed, db.current)
+	return db.reader.buildContinuation(db.reader.Prev(math.MaxUint64), 0)
 }
 
 func (db *DB) Compress(start, stop uint64) {
@@ -207,25 +154,24 @@ func (db *DB) Compress(start, stop uint64) {
 	for _, commit := range db.closed {
 		if commit <= start || commit > stop {
 			newclosed = append(newclosed, commit)
-		} else {
-
-			mutex(commit).Lock()
-			defer mutex(commit).Unlock()
-			db.forgetStream(commit)
 		}
 	}
 
-	mutex(start).Lock()
-	defer mutex(start).Unlock()
-	db.forgetStream(start)
-
-	if _, err := os.Open(db.compressedpath(start)); !os.IsNotExist(err) {
-		if err := os.Rename(db.compressedpath(start), db.path(start)); err != nil {
+	if _, err := os.Open(db.reader.compressedpath(start)); !os.IsNotExist(err) {
+		if err := os.Rename(db.reader.compressedpath(start), db.reader.path(start)); err != nil {
 			log.Fatal(err)
 		}
 	}
 
 	db.closed = newclosed
+}
+
+func (db *DB) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream, error) {
+	if db.current == commit && db.stream != nil {
+		return db.stream, nil
+	}
+
+	return db.reader.retrieveStream(commit, fetchMissing)
 }
 
 func (db *DB) SaveAt(index, term uint64) ([]byte, error) {
@@ -262,12 +208,14 @@ func (db *DB) Recovery(b []byte) error {
 	return nil
 }
 
-func (db *DB) path(commit uint64) string {
-	return filepath.Join(db.dir, fmt.Sprintf("events.%024v.stream", commit))
-}
+func (db *DB) peerConnectionStrings() []string {
+	peers := make([]string, 0, len(db.raft.Peers()))
 
-func (db *DB) compressedpath(commit uint64) string {
-	return filepath.Join(db.dir, fmt.Sprintf("events.%024v.tmpstream", commit))
+	for _, peer := range db.raft.Peers() {
+		peers = append(peers, peer.ConnectionString)
+	}
+
+	return peers
 }
 
 func (db *DB) addClosed(commit uint64) {
@@ -284,12 +232,12 @@ func (db *DB) setCurrent(commit uint64) {
 	db.current = commit
 	db.mockoffset = 10
 
-	err := os.Remove(db.path(commit))
+	err := os.Remove(db.reader.path(commit))
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 		log.Fatal(err)
 	}
 
-	s, err := stream.New(db.path(commit))
+	s, err := stream.New(db.reader.path(commit))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -317,132 +265,4 @@ func (db *DB) snapshot(index, term uint64) {
 
 		log.Println("RAFT SNAPSHOT: Complete in", time.Since(start))
 	})()
-}
-
-func (db *DB) prev(commit uint64) uint64 {
-	var result uint64
-
-	for _, c := range db.closed {
-		if c < commit && c > result {
-			result = c
-		}
-	}
-
-	return result
-}
-
-func (db *DB) next(commit uint64) uint64 {
-	var result uint64
-
-	result = math.MaxUint64
-
-	for _, c := range db.closed {
-		if c > commit && c < result {
-			result = c
-		}
-	}
-
-	if db.current > commit && db.current < result {
-		result = db.current
-	}
-
-	if result == math.MaxUint64 {
-		result = 0
-	}
-
-	return result
-}
-
-func (db *DB) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream, error) {
-	mutex(commit).Lock()
-	defer mutex(commit).Unlock()
-
-	if db.current == commit && db.stream != nil {
-		return db.stream, nil
-	}
-
-	if db.streams[commit] == nil {
-		var err error
-		(func() {
-			if db.streams[commit] == nil {
-				var s stream.Stream
-				var missing bool
-
-				s, err = stream.Open(db.path(commit))
-
-				if err != nil && strings.Contains(err.Error(), "no such file or directory") {
-					missing = true
-				}
-
-				if s != nil && !s.Closed() {
-					println("found open stream:", commit)
-					missing = true
-					s = nil
-				}
-
-				if missing && fetchMissing {
-					s, err = RecoverStream(db.raft, db.dir, fmt.Sprintf("events.%024v.stream", commit))
-				}
-
-				if err == nil {
-					db.streams[commit] = s
-				}
-			}
-		})()
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return db.streams[commit], nil
-}
-
-func (db *DB) forgetStream(commit uint64) {
-	if db.streams[commit] != nil {
-		db.streams[commit].Close()
-	}
-
-	delete(db.streams, commit)
-}
-
-func mutex(commit uint64) *sync.Mutex {
-	if streamlocks == nil {
-		streamlocks = make(map[uint64]*sync.Mutex)
-	}
-
-	if streamlocks[commit] == nil {
-		streamlocks[commit] = &sync.Mutex{}
-	}
-
-	return streamlocks[commit]
-}
-
-func (db *DB) parseContinuation(continuation string, reverse bool) (uint64, int64) {
-	commit := db.current
-
-	if !reverse && len(db.closed) > 0 {
-		commit = db.closed[0]
-	}
-
-	var offset int64
-
-	if continuation != "" {
-		parts := strings.SplitN(continuation, ":", 2)
-
-		if len(parts) == 2 {
-			commit, _ = strconv.ParseUint(parts[0], 10, 64)
-			offset, _ = strconv.ParseInt(parts[1], 10, 64)
-		}
-	}
-
-	return commit, offset
-}
-
-func buildContinuation(commit uint64, offset int64) string {
-	if commit > 0 {
-		return fmt.Sprint(commit, ":", offset)
-	} else {
-		return ""
-	}
 }

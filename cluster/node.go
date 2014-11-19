@@ -38,8 +38,10 @@ type NodeState struct {
 }
 
 type Metadata struct {
-	Closed  []uint64 `json:"closed"`
-	Current uint64   `json:"current"`
+	Peers      []string `json:"peers"`
+	Closed     []uint64 `json:"closed"`
+	Current    uint64   `json:"current"`
+	MostRecent int64    `json:"recent"`
 }
 
 func NewNode(path, host string, port int) (n *Node) {
@@ -156,8 +158,10 @@ func (n *Node) State() NodeState {
 
 func (n *Node) Metadata() Metadata {
 	return Metadata{
-		Closed:  n.db.closed,
-		Current: n.db.current,
+		Peers:      n.db.peerConnectionStrings(),
+		Closed:     n.db.closed,
+		Current:    n.db.current,
+		MostRecent: n.db.MostRecent,
 	}
 }
 
@@ -176,11 +180,5 @@ func (n *Node) LeaderConnectionString() (string, error) {
 }
 
 func (n *Node) ClusterConnectionStrings() []string {
-	peers := []string{fmt.Sprintf("http://%s:%d", n.host, n.port)}
-
-	for _, peer := range n.raft.Peers() {
-		peers = append(peers, peer.ConnectionString)
-	}
-
-	return peers
+	return append(n.db.peerConnectionStrings(), fmt.Sprintf("http://%s:%d", n.host, n.port))
 }

@@ -49,7 +49,7 @@ func initRaft(n *Node) (raft.Server, error) {
 	s.SetHeartbeatInterval(25 * time.Millisecond)
 	s.SetElectionTimeout(time.Second)
 
-	n.db.raft = s
+	n.db.setRaft(s)
 
 	if err := os.MkdirAll(filepath.Join(n.path, "snapshot"), 0744); err != nil {
 		log.Fatalf("Unable to create stream directory: %v", err)
