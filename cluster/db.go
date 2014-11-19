@@ -201,14 +201,9 @@ func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, erro
 	return buildContinuation(commit, offset), nil
 }
 
-func (db *DB) Compress(start, stop uint64) error {
+func (db *DB) Compress(start, stop uint64) {
 	streamlock.Lock()
 	defer streamlock.Unlock()
-
-	compressed, err := stream.Open(db.compressedpath(start))
-	if err != nil || !compressed.Closed() {
-		return errors.New("Compressed stream not present or not closed")
-	}
 
 	newclosed := make([]uint64, 0, len(db.closed))
 
@@ -220,13 +215,13 @@ func (db *DB) Compress(start, stop uint64) error {
 		}
 	}
 
-	if err := os.Rename(db.compressedpath(start), db.path(start)); err != nil {
-		return err
+	if _, err := os.Open(db.compressedpath(start)); !os.IsNotExist(err) {
+		if err := os.Rename(db.compressedpath(start), db.path(start)); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	db.closed = newclosed
-
-	return nil
 }
 
 func (db *DB) SaveAt(index, term uint64) ([]byte, error) {

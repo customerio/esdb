@@ -67,6 +67,7 @@ func (c *LocalClient) StreamsMetadata() (*Metadata, error) {
 func (c *Client) Compress(start, stop uint64) error {
 	reader := strings.NewReader("")
 	resp, err := http.Post(c.Leader+"/events/compress/"+strconv.FormatUint(start, 10)+"/"+strconv.FormatUint(stop, 10), "application/json", reader)
+
 	if err != nil {
 		if len(c.Nodes) == 1 && c.Nodes[0] == c.Leader {
 			return err
