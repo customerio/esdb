@@ -8,16 +8,11 @@ import (
 func (n *Node) offsetEventsHandler(w http.ResponseWriter, req *http.Request) {
 	req.Body.Close()
 
-	meta := Metadata{
-		Closed:  n.db.closed,
-		Current: n.db.current,
-	}
-
 	index := req.FormValue("index")
 	value := req.FormValue("value")
 
 	js, _ := json.MarshalIndent(map[string]interface{}{
-		"meta":         meta,
+		"meta":         n.Metadata(),
 		"continuation": n.db.Continuation(index, value),
 	}, "", "  ")
 
