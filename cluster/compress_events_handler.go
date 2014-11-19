@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (n *Node) archiveEventsHandler(w http.ResponseWriter, req *http.Request) {
+func (n *Node) compressEventsHandler(w http.ResponseWriter, req *http.Request) {
 	req.Body.Close()
 
 	if req.Method != "POST" {
@@ -14,7 +14,7 @@ func (n *Node) archiveEventsHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	name := strings.Replace(req.URL.Path, "/events/archive/", "", 1)
+	name := strings.Replace(req.URL.Path, "/events/compress/", "", 1)
 
 	parts := strings.Split(name, "/")
 
@@ -24,7 +24,7 @@ func (n *Node) archiveEventsHandler(w http.ResponseWriter, req *http.Request) {
 		start, _ := strconv.ParseInt(parts[0], 10, 64)
 		stop, _ := strconv.ParseInt(parts[1], 10, 64)
 
-		err = n.Archive(uint64(start), uint64(stop))
+		err = n.Compress(uint64(start), uint64(stop))
 
 		if err == NOT_LEADER_ERROR {
 			var uri string

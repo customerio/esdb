@@ -22,7 +22,7 @@ func NewRestServer(n *Node) *RestServer {
 	n.HandleFunc("/events", n.eventHandler)
 	n.HandleFunc("/events/meta", n.metaEventsHandler)
 	n.HandleFunc("/events/offset", n.offsetEventsHandler)
-	n.HandleFunc("/events/archive/", n.archiveEventsHandler)
+	n.HandleFunc("/events/compress/", n.compressEventsHandler)
 
 	n.HandleFunc("/stream/", n.recoverHandler)
 

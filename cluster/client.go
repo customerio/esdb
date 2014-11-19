@@ -64,9 +64,9 @@ func (c *LocalClient) StreamsMetadata() (*Metadata, error) {
 	return &meta, err
 }
 
-func (c *Client) Archive(start, stop uint64) error {
+func (c *Client) Compress(start, stop uint64) error {
 	reader := strings.NewReader("")
-	resp, err := http.Post(c.Leader+"/events/archive/"+strconv.FormatUint(start, 10)+"/"+strconv.FormatUint(stop, 10), "application/json", reader)
+	resp, err := http.Post(c.Leader+"/events/compress/"+strconv.FormatUint(start, 10)+"/"+strconv.FormatUint(stop, 10), "application/json", reader)
 	if err != nil {
 		if len(c.Nodes) == 1 && c.Nodes[0] == c.Leader {
 			return err
@@ -74,7 +74,7 @@ func (c *Client) Archive(start, stop uint64) error {
 
 		c.Leader = c.Nodes[rand.Intn(len(c.Nodes))]
 		fmt.Println("error when connecting to leader", err, "switching to", c.Leader)
-		return c.Archive(start, stop)
+		return c.Compress(start, stop)
 	}
 
 	defer resp.Body.Close()
@@ -83,7 +83,7 @@ func (c *Client) Archive(start, stop uint64) error {
 
 	if resp.StatusCode == 400 && leader != "" {
 		c.Leader = leader
-		return c.Archive(start, stop)
+		return c.Compress(start, stop)
 	}
 
 	return nil

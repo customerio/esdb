@@ -11,34 +11,6 @@ import (
 	"testing"
 )
 
-func esdbCommits() []int {
-	commits := make([]int, 0)
-
-	err := filepath.Walk("tmp/teststream", func(path string, f os.FileInfo, err error) error {
-		if !strings.HasSuffix(path, ".esdb") {
-			return nil
-		}
-
-		path = strings.Replace(path, "tmp/teststream/stream/events.", "", 1)
-		path = strings.Replace(path, ".esdb", "", 1)
-
-		commit, err := strconv.ParseInt(path, 10, 64)
-		if err != nil {
-			panic(err)
-		}
-
-		commits = append(commits, int(commit))
-
-		return nil
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
-	return commits
-}
-
 func streamCommits() []int {
 	commits := make([]int, 0)
 
@@ -83,20 +55,15 @@ func TestCompression(t *testing.T) {
 			t.Errorf("Incorrect committed streams. Wanted: %v, found: %v", expectedCommits, streamCommits())
 		}
 
-		Compress("tmp/teststream", 1, 291, n.db.closed)
-		n.Archive(1, 291)
-		Compress("tmp/teststream", 292, 490, n.db.closed)
-		n.Archive(292, 490)
+		Merge("tmp/teststream", 1, 291, n.db.closed)
+		n.Compress(1, 291)
+		Merge("tmp/teststream", 292, 490, n.db.closed)
+		n.Compress(292, 490)
 		Cleanup("tmp/teststream", n.db.current, n.db.closed)
 
-		expectedCommits = []int{491, 492, 493, 494, 495, 496, 497, 498, 499, 500, 501, 502}
+		expectedCommits = []int{1, 292, 491, 492, 493, 494, 495, 496, 497, 498, 499, 500, 501, 502}
 
-		// Test that we have 1 esdb file and 10 stream files
-		if !reflect.DeepEqual(esdbCommits(), []int{1, 292}) {
-			t.Errorf("Incorrect post-compress committed ESDBs. Wanted: %v, found: %v", []int{1, 292}, esdbCommits())
-		}
-
-		// Test that we have 1 esdb file and 10 stream files
+		// Test that we have 2 large streams and 10 normal stream files
 		if !reflect.DeepEqual(streamCommits(), expectedCommits) {
 			t.Errorf("Incorrect post-compress committed streams. Wanted: %v, found: %v", expectedCommits, streamCommits())
 		}

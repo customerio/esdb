@@ -38,9 +38,8 @@ type NodeState struct {
 }
 
 type Metadata struct {
-	Archived []uint64 `json:"archived"`
-	Closed   []uint64 `json:"closed"`
-	Current  uint64   `json:"current"`
+	Closed  []uint64 `json:"closed"`
+	Current uint64   `json:"current"`
 }
 
 func NewNode(path, host string, port int) (n *Node) {
@@ -124,13 +123,13 @@ func (n *Node) Event(body []byte, indexes map[string]string) (err error) {
 	return
 }
 
-func (n *Node) Archive(start, stop uint64) (err error) {
+func (n *Node) Compress(start, stop uint64) (err error) {
 	if n.raft == nil {
 		return errors.New("Raft not yet initialized")
 	}
 
 	if n.raft.State() == "leader" {
-		_, err = n.raft.Do(NewArchiveCommand(start, stop))
+		_, err = n.raft.Do(NewCompressCommand(start, stop))
 	} else {
 		err = NOT_LEADER_ERROR
 	}
@@ -157,9 +156,8 @@ func (n *Node) State() NodeState {
 
 func (n *Node) Metadata() Metadata {
 	return Metadata{
-		Archived: n.db.archived,
-		Closed:   n.db.closed,
-		Current:  n.db.current,
+		Closed:  n.db.closed,
+		Current: n.db.current,
 	}
 }
 

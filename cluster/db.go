@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"github.com/customerio/esdb"
 	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/stream"
 	"github.com/jrallison/raft"
@@ -28,7 +27,6 @@ var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that's still open.")
 
 type DB struct {
 	dir             string
-	archived        []uint64
 	closed          []uint64
 	current         uint64
 	MostRecent      int64
@@ -38,12 +36,11 @@ type DB struct {
 	rtimer          Timer
 	stream          stream.Stream
 	streams         map[uint64]stream.Stream
-	archives        map[uint64]*esdb.Db
 	mockoffset      int64
 	raft            raft.Server
 }
 
-var streamlock sync.Mutex
+var streamlock sync.RWMutex
 
 func NewDb(path string) *DB {
 	db := &DB{
@@ -51,7 +48,6 @@ func NewDb(path string) *DB {
 		wtimer:          NilTimer{},
 		rtimer:          NilTimer{},
 		streams:         make(map[uint64]stream.Stream),
-		archives:        make(map[uint64]*esdb.Db),
 		RotateThreshold: DEFAULT_ROTATE_THRESHOLD,
 		SnapshotBuffer:  DEFAULT_SNAPSHOT_BUFFER,
 	}
@@ -135,119 +131,51 @@ func (db *DB) Rotate(commit, term uint64) error {
 func (db *DB) Continuation(name, value string) string {
 	if db.stream != nil {
 		if offset, err := db.stream.First(name, value); err == nil && offset > 0 {
-			return buildContinuation(db.current, offset, false)
+			return buildContinuation(db.current, offset)
 		}
 	}
 
-	return buildContinuation(db.prev(math.MaxUint64), 0, false)
+	return buildContinuation(db.prev(math.MaxUint64), 0)
 }
 
 func (db *DB) Scan(name, value, continuation string, scanner stream.Scanner) (string, error) {
 	var stopped bool
 
-	commit, offset, archive := db.parseContinuation(continuation, true)
-
-	if !archive {
-		for !stopped && commit > 0 {
-			s, err := db.retrieveStream(commit, true)
-			if err != nil {
-				return "", err
-			}
-
-			err = s.ScanIndex(name, value, offset, func(e *stream.Event) bool {
-				offset = e.Next(name, value)
-				stopped = !scanner(e)
-				return !stopped
-			})
-
-			if err != nil {
-				return "", err
-			}
-
-			if !stopped {
-				commit = db.prev(commit)
-				offset = 0
-			}
-		}
-
-		if stopped {
-			if offset == 0 {
-				commit = db.prev(commit)
-			}
-
-			if commit == 0 {
-				return buildContinuation(db.prevArchive(math.MaxUint64), 0, true), nil
-			} else {
-				return buildContinuation(commit, offset, false), nil
-			}
-		}
-
-		commit = db.prevArchive(math.MaxUint64)
-	}
+	commit, offset := db.parseContinuation(continuation, true)
 
 	for !stopped && commit > 0 {
-		d, err := db.retrieveArchive(commit)
+		s, err := db.retrieveStream(commit, true)
 		if err != nil {
 			return "", err
 		}
 
-		if space := d.Find([]byte("a")); space != nil {
-			events := make([]*stream.Event, 0)
+		err = s.ScanIndex(name, value, offset, func(e *stream.Event) bool {
+			offset = e.Next(name, value)
+			stopped = !scanner(e)
+			return !stopped
+		})
 
-			space.Scan("", func(e *esdb.Event) bool {
-				events = append(events, stream.NewEvent(e.Data, map[string]int64{}))
-				return true
-			})
-
-			for i := len(events); i > 0; i-- {
-				if !scanner(events[i-1]) {
-					stopped = true
-				}
-			}
+		if err != nil {
+			return "", err
 		}
 
-		commit = db.prevArchive(commit)
+		if !stopped {
+			commit = db.prev(commit)
+			offset = 0
+		}
 	}
 
-	return buildContinuation(commit, 0, true), nil
+	if stopped && offset == 0 {
+		commit = db.prev(commit)
+	}
+
+	return buildContinuation(commit, 0), nil
 }
 
 func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, error) {
 	var stopped bool
 
-	commit, offset, archive := db.parseContinuation(continuation, false)
-
-	if archive {
-		for commit > 0 {
-			d, err := db.retrieveArchive(commit)
-			if err != nil {
-				return "", err
-			}
-
-			if space := d.Find([]byte("a")); space != nil {
-				space.Scan("", func(e *esdb.Event) bool {
-					if !scanner(stream.NewEvent(e.Data, map[string]int64{})) {
-						stopped = true
-					}
-
-					return true
-				})
-			}
-
-			commit = db.nextArchive(commit)
-
-			if stopped {
-				if commit == 0 {
-					return buildContinuation(db.next(0), 0, false), nil
-				} else {
-					return buildContinuation(commit, 0, true), nil
-				}
-			}
-		}
-
-		commit = db.next(0)
-		offset = 0
-	}
+	commit, offset := db.parseContinuation(continuation, false)
 
 	for !stopped && commit > 0 {
 		s, err := db.retrieveStream(commit, true)
@@ -270,20 +198,35 @@ func (db *DB) Iterate(continuation string, scanner stream.Scanner) (string, erro
 		}
 	}
 
-	return buildContinuation(commit, offset, false), nil
+	return buildContinuation(commit, offset), nil
 }
 
-func (db *DB) Archive(start, stop uint64) {
+func (db *DB) Compress(start, stop uint64) error {
+	streamlock.Lock()
+	defer streamlock.Unlock()
+
+	compressed, err := stream.Open(db.compressedpath(start))
+	if err != nil || !compressed.Closed() {
+		return errors.New("Compressed stream not present or not closed")
+	}
+
 	newclosed := make([]uint64, 0, len(db.closed))
 
 	for _, commit := range db.closed {
-		if commit < start || commit > stop {
+		if commit <= start || commit > stop {
 			newclosed = append(newclosed, commit)
+		} else {
+			db.forgetStream(commit)
 		}
 	}
 
-	db.addArchived(start)
+	if err := os.Rename(db.compressedpath(start), db.path(start)); err != nil {
+		return err
+	}
+
 	db.closed = newclosed
+
+	return nil
 }
 
 func (db *DB) SaveAt(index, term uint64) ([]byte, error) {
@@ -302,12 +245,6 @@ func (db *DB) Save() ([]byte, error) {
 		binary.WriteInt64(buf, int64(commit))
 	}
 
-	binary.WriteUvarint(buf, len(db.archived))
-
-	for _, commit := range db.archived {
-		binary.WriteInt64(buf, int64(commit))
-	}
-
 	return buf.Bytes(), nil
 }
 
@@ -323,22 +260,6 @@ func (db *DB) Recovery(b []byte) error {
 		db.addClosed(uint64(binary.ReadInt64(buf)))
 	}
 
-	count = int(binary.ReadUvarint(buf))
-
-	for i := 0; i < count; i++ {
-		db.addArchived(uint64(binary.ReadInt64(buf)))
-	}
-
-	return nil
-}
-
-func (db *DB) RecoverStreams() error {
-	for _, commit := range db.closed {
-		if _, err := db.retrieveStream(commit, true); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -346,8 +267,8 @@ func (db *DB) path(commit uint64) string {
 	return filepath.Join(db.dir, fmt.Sprintf("events.%024v.stream", commit))
 }
 
-func (db *DB) archivepath(commit uint64) string {
-	return filepath.Join(db.dir, fmt.Sprintf("events.%024v.esdb", commit))
+func (db *DB) compressedpath(commit uint64) string {
+	return filepath.Join(db.dir, fmt.Sprintf("events.%024v.tmpstream", commit))
 }
 
 func (db *DB) addClosed(commit uint64) {
@@ -358,16 +279,6 @@ func (db *DB) addClosed(commit uint64) {
 	}
 
 	db.closed = append(db.closed, commit)
-}
-
-func (db *DB) addArchived(commit uint64) {
-	for _, existing := range db.archived {
-		if existing == commit {
-			return
-		}
-	}
-
-	db.archived = append(db.archived, commit)
 }
 
 func (db *DB) setCurrent(commit uint64) {
@@ -421,18 +332,6 @@ func (db *DB) prev(commit uint64) uint64 {
 	return result
 }
 
-func (db *DB) prevArchive(commit uint64) uint64 {
-	var result uint64
-
-	for _, c := range db.archived {
-		if c < commit && c > result {
-			result = c
-		}
-	}
-
-	return result
-}
-
 func (db *DB) next(commit uint64) uint64 {
 	var result uint64
 
@@ -455,97 +354,63 @@ func (db *DB) next(commit uint64) uint64 {
 	return result
 }
 
-func (db *DB) nextArchive(commit uint64) uint64 {
-	var result uint64
-
-	result = math.MaxUint64
-
-	for _, c := range db.archived {
-		if c > commit && c < result {
-			result = c
-		}
-	}
-
-	if result == math.MaxUint64 {
-		result = 0
-	}
-
-	return result
-}
-
 func (db *DB) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream, error) {
 	if db.current == commit && db.stream != nil {
 		return db.stream, nil
 	}
 
 	if db.streams[commit] == nil {
-		streamlock.Lock()
-		defer streamlock.Unlock()
+		var err error
+		(func() {
+			streamlock.Lock()
+			defer streamlock.Unlock()
 
-		if db.streams[commit] == nil {
-			var s stream.Stream
-			var err error
-			var missing bool
+			if db.streams[commit] == nil {
+				var s stream.Stream
+				var missing bool
 
-			s, err = stream.Open(db.path(commit))
+				s, err = stream.Open(db.path(commit))
 
-			if err != nil && strings.Contains(err.Error(), "no such file or directory") {
-				missing = true
+				if err != nil && strings.Contains(err.Error(), "no such file or directory") {
+					missing = true
+				}
+
+				if s != nil && !s.Closed() {
+					println("found open stream:", commit)
+					missing = true
+					s = nil
+				}
+
+				if missing && fetchMissing {
+					s, err = RecoverStream(db.raft, db.dir, fmt.Sprintf("events.%024v.stream", commit))
+				}
+
+				if err == nil {
+					db.streams[commit] = s
+				}
 			}
+		})()
 
-			if s != nil && !s.Closed() {
-				println("found open stream:", commit)
-				missing = true
-				s = nil
-			}
-
-			if missing && fetchMissing {
-				s, err = RecoverStream(db.raft, db.dir, fmt.Sprintf("events.%024v.stream", commit))
-			}
-
-			if err != nil {
-				return nil, err
-			}
-
-			db.streams[commit] = s
+		if err != nil {
+			return nil, err
 		}
 	}
+
+	streamlock.RLock()
+	defer streamlock.RUnlock()
 
 	return db.streams[commit], nil
 }
 
-func (db *DB) retrieveArchive(commit uint64) (*esdb.Db, error) {
-	if db.archives[commit] == nil {
-		streamlock.Lock()
-		defer streamlock.Unlock()
-
-		if db.archives[commit] == nil {
-			var d *esdb.Db
-			var err error
-
-			d, err = esdb.Open(db.archivepath(commit))
-			if err != nil {
-				return nil, err
-			}
-
-			db.archives[commit] = d
-		}
-	}
-
-	return db.archives[commit], nil
+func (db *DB) forgetStream(commit uint64) {
+	delete(db.streams, commit)
 }
 
-func (db *DB) parseContinuation(continuation string, reverse bool) (uint64, int64, bool) {
+func (db *DB) parseContinuation(continuation string, reverse bool) (uint64, int64) {
 	commit := db.current
-	archive := false
 
-	if !reverse {
-		if len(db.archived) > 0 {
-			commit = db.archived[0]
-			archive = true
-		} else if len(db.closed) > 0 {
-			commit = db.closed[0]
-		}
+	if !reverse && len(db.closed) > 0 {
+		commit = db.closed[0]
 	}
 
 	var offset int64
@@ -556,20 +421,14 @@ func (db *DB) parseContinuation(continuation string, reverse bool) (uint64, int6
 		if len(parts) == 2 {
 			commit, _ = strconv.ParseUint(parts[0], 10, 64)
 			offset, _ = strconv.ParseInt(parts[1], 10, 64)
-			archive = false
-		} else if len(parts) == 1 {
-			commit, _ = strconv.ParseUint(parts[0], 10, 64)
-			archive = true
 		}
 	}
 
-	return commit, offset, archive
+	return commit, offset
 }
 
-func buildContinuation(commit uint64, offset int64, archive bool) string {
-	if archive && commit > 0 {
-		return fmt.Sprint(commit)
-	} else if commit > 0 {
+func buildContinuation(commit uint64, offset int64) string {
+	if commit > 0 {
 		return fmt.Sprint(commit, ":", offset)
 	} else {
 		return ""

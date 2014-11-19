@@ -9,9 +9,8 @@ func (n *Node) offsetEventsHandler(w http.ResponseWriter, req *http.Request) {
 	req.Body.Close()
 
 	meta := Metadata{
-		Archived: n.db.archived,
-		Closed:   n.db.closed,
-		Current:  n.db.current,
+		Closed:  n.db.closed,
+		Current: n.db.current,
 	}
 
 	index := req.FormValue("index")

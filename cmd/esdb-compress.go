@@ -25,28 +25,14 @@ func main() {
 
 	flag.Parse()
 
-	// Set the data directory.
-	if flag.NArg() == 0 {
-		flag.Usage()
-		log.Fatal("Data path argument required")
-	}
-
 	if *start == 0 || *stop == 0 {
 		flag.Usage()
 		log.Fatal("start and stop commits are required")
 	}
 
-	dbpath := flag.Arg(0)
+	client := cluster.NewClient("http://" + *node)
 
-	client := cluster.NewLocalClient("http://" + *node)
-
-	meta, err := client.StreamsMetadata()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = cluster.Compress(dbpath, *start, *stop, meta.Closed)
-	if err != nil {
+	if err := client.Compress(*start, *stop); err != nil {
 		log.Fatal(err)
 	}
 }

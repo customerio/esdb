@@ -36,7 +36,7 @@ func Connect(n *Node, existing string) error {
 func initRaft(n *Node) (raft.Server, error) {
 	registerCommands.Do(func() {
 		raft.RegisterCommand(&EventCommand{})
-		raft.RegisterCommand(&ArchiveCommand{})
+		raft.RegisterCommand(&CompressCommand{})
 	})
 
 	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
