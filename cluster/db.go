@@ -215,6 +215,8 @@ func (db *DB) Compress(start, stop uint64) {
 		}
 	}
 
+	db.forgetStream(start)
+
 	if _, err := os.Open(db.compressedpath(start)); !os.IsNotExist(err) {
 		if err := os.Rename(db.compressedpath(start), db.path(start)); err != nil {
 			log.Fatal(err)
