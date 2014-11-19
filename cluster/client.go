@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,11 @@ type Client struct {
 
 type LocalClient struct {
 	Node string
+}
+
+type OffsetResponse struct {
+	Continuation string   `json:"continuation"`
+	Metadata     Metadata `json:"meta"`
 }
 
 func NewClient(node string) *Client {
@@ -62,6 +68,35 @@ func (c *LocalClient) StreamsMetadata() (*Metadata, error) {
 	var meta Metadata
 	err = json.Unmarshal(body, &meta)
 	return &meta, err
+}
+
+func (c *LocalClient) Offset(index, value string) (*Metadata, string, error) {
+	dest, err := url.Parse(c.Node)
+	if err != nil {
+		return nil, "", err
+	}
+
+	dest.Path += "/events/offset"
+	parameters := url.Values{}
+	parameters.Add("index", index)
+	parameters.Add("value", value)
+	dest.RawQuery = parameters.Encode()
+
+	resp, err := http.Get(dest.String())
+	if err != nil {
+		return nil, "", err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+
+	var or OffsetResponse
+	err = json.Unmarshal(body, &or)
+	return &or.Metadata, or.Continuation, err
 }
 
 func (c *Client) Compress(start, stop uint64) error {
