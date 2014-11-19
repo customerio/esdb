@@ -29,22 +29,28 @@ func Compress(dbpath string, start, stop uint64, closed []uint64) error {
 	}
 
 	for _, commit := range commits {
+		log.Println("Compressing", filepath.Join(dbpath, "stream", fmt.Sprintf("events.%024v.stream", commit)))
 		s, err := stream.Open(filepath.Join(dbpath, "stream", fmt.Sprintf("events.%024v.stream", commit)))
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		s.Iterate(0, func(e *stream.Event) bool {
-			js, err := simplejson.NewJson(e.Data)
-			if err != nil {
-				log.Fatal(err)
-			}
+		if s.Closed() {
+			_, err = s.Iterate(0, func(e *stream.Event) bool {
+				js, err := simplejson.NewJson(e.Data)
+				if err != nil {
+					log.Fatal(err)
+				}
 
-			timestamp := js.Get("timestamp").MustInt()
-			writer.Add([]byte("a"), e.Data, timestamp, "", e.Indexes())
+				timestamp := js.Get("timestamp").MustInt()
+				writer.Add([]byte("a"), e.Data, timestamp, "", e.Indexes())
 
-			return true
-		})
+				return true
+			})
+		}
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
 	return writer.Write()
