@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -20,6 +21,12 @@ const (
 )
 
 var RETRIEVED_OPEN_STREAM = errors.New("Retrieved a stream that's still open.")
+
+type OffsetSlice []uint64
+
+func (p OffsetSlice) Len() int           { return len(p) }
+func (p OffsetSlice) Less(i, j int) bool { return p[i] < p[j] }
+func (p OffsetSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 type DB struct {
 	dir             string
@@ -151,10 +158,14 @@ func (db *DB) Compress(start, stop uint64) {
 	newclosed := make([]uint64, 0, len(db.closed))
 
 	for _, commit := range db.closed {
-		if commit <= start || commit > stop {
+		if commit < start || commit > stop {
 			newclosed = append(newclosed, commit)
 		}
 	}
+
+	newclosed = append(newclosed, start)
+
+	sort.Sort(OffsetSlice(newclosed))
 
 	if _, err := os.Open(db.reader.compressedpath(start)); !os.IsNotExist(err) {
 		if err := os.Rename(db.reader.compressedpath(start), db.reader.path(start)); err != nil {
