@@ -41,6 +41,8 @@ func main() {
 	reader := cluster.NewReader(flag.Arg(0))
 
 	http.HandleFunc("/events", func(w http.ResponseWriter, req *http.Request) {
+		req.Body.Close()
+
 		var count int
 		var err error
 
@@ -50,6 +52,13 @@ func main() {
 		limit, _ := strconv.Atoi(req.FormValue("limit"))
 
 		meta, con, err := client.Offset(index, value)
+		if err != nil {
+			write(w, 500, map[string]interface{}{
+				"error": err.Error(),
+			})
+
+			return
+		}
 
 		reader.Update(meta.Peers, meta.Closed, meta.Current)
 
@@ -84,17 +93,22 @@ func main() {
 		}
 
 		if err != nil {
-			w.WriteHeader(500)
 			res["error"] = err.Error()
+			write(w, 500, res)
 		}
 
-		js, _ := json.MarshalIndent(res, "", "  ")
-		w.Write(js)
-		w.Write([]byte("\n"))
+		write(w, 200, res)
 	})
 
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", *host, *port), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func write(w http.ResponseWriter, code int, body map[string]interface{}) {
+	w.WriteHeader(code)
+	js, _ := json.MarshalIndent(body, "", "  ")
+	w.Write(js)
+	w.Write([]byte("\n"))
 }
