@@ -16,6 +16,7 @@ type Reader struct {
 	closed  []uint64
 	current uint64
 	peers   []string
+	stream  stream.Stream
 	streams map[uint64]stream.Stream
 	mutexes map[uint64]*sync.Mutex
 }
@@ -126,7 +127,7 @@ func (r *Reader) Next(commit uint64) uint64 {
 	return result
 }
 
-func (r *Reader) Update(peers []string, closed []uint64, current uint64) {
+func (r *Reader) Update(peers []string, closed []uint64, current uint64, stream stream.Stream) {
 	r.peers = peers
 
 	if len(closed) < len(r.closed) {
@@ -140,18 +141,16 @@ func (r *Reader) Update(peers []string, closed []uint64, current uint64) {
 		}
 	}
 
+	r.current = current
+	r.stream = stream
 	r.closed = closed
-
-	if current != r.current {
-		r.mutex(r.current).Lock()
-		defer r.mutex(r.current).Unlock()
-
-		r.forgetStream(r.current)
-		r.current = current
-	}
 }
 
 func (r *Reader) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream, error) {
+	if commit == r.current {
+		return r.stream, nil
+	}
+
 	r.mutex(commit).Lock()
 	defer r.mutex(commit).Unlock()
 
@@ -168,7 +167,7 @@ func (r *Reader) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream
 					missing = true
 				}
 
-				if s != nil && commit != r.current && !s.Closed() {
+				if s != nil && !s.Closed() {
 					println("found open stream:", commit)
 					missing = true
 					s = nil
