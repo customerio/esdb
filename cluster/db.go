@@ -168,7 +168,7 @@ func (db *DB) Compress(start, stop uint64) {
 	sort.Sort(OffsetSlice(newclosed))
 
 	if _, err := os.Open(db.reader.compressedpath(start)); !os.IsNotExist(err) {
-		if err := os.Rename(db.reader.compressedpath(start), db.reader.path(start)); err != nil {
+		if err := os.Rename(db.reader.compressedpath(start), db.reader.Path(start)); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -242,12 +242,12 @@ func (db *DB) setCurrent(commit uint64) {
 	db.current = commit
 	db.mockoffset = 10
 
-	err := os.Remove(db.reader.path(commit))
+	err := os.Remove(db.reader.Path(commit))
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 		log.Fatal(err)
 	}
 
-	s, err := stream.New(db.reader.path(commit))
+	s, err := stream.New(db.reader.Path(commit))
 	if err != nil {
 		log.Fatal(err)
 	}

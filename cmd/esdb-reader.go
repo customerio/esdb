@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 )
 
 var node = flag.String("n", "localhost:4001", "node to read from")
@@ -39,6 +40,7 @@ func main() {
 
 	client := cluster.NewLocalClient("http://" + *node)
 	reader := cluster.NewReader(flag.Arg(0))
+	streams := make(map[uint64]stream.Stream)
 
 	http.HandleFunc("/events", func(w http.ResponseWriter, req *http.Request) {
 		req.Body.Close()
@@ -60,7 +62,7 @@ func main() {
 			return
 		}
 
-		reader.Update(meta.Peers, meta.Closed, meta.Current)
+		reader.Update(meta.Peers, meta.Closed, meta.Current, currentStream(reader, streams, meta.Current))
 
 		events := make([]string, 0, limit)
 
@@ -104,6 +106,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+var open sync.Mutex
+
+func currentStream(r *cluster.Reader, streams map[uint64]stream.Stream, current uint64) stream.Stream {
+	open.Lock()
+	defer open.Unlock()
+
+	if streams[current] == nil {
+		s, err := stream.Open(r.Path(current))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		streams[current] = s
+	}
+
+	return streams[current]
 }
 
 func write(w http.ResponseWriter, code int, body map[string]interface{}) {

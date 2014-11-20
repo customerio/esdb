@@ -161,7 +161,7 @@ func (r *Reader) retrieveStream(commit uint64, fetchMissing bool) (stream.Stream
 				var s stream.Stream
 				var missing bool
 
-				s, err = stream.Open(r.path(commit))
+				s, err = stream.Open(r.Path(commit))
 
 				if err != nil && strings.Contains(err.Error(), "no such file or directory") {
 					missing = true
@@ -207,7 +207,7 @@ func (r *Reader) mutex(commit uint64) *sync.Mutex {
 	return r.mutexes[commit]
 }
 
-func (r *Reader) path(commit uint64) string {
+func (r *Reader) Path(commit uint64) string {
 	return filepath.Join(r.dir, fmt.Sprintf("events.%024v.stream", commit))
 }
 
