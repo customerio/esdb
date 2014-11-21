@@ -38,7 +38,7 @@ func main() {
 
 	dbpath := flag.Arg(0)
 
-	client := cluster.NewLocalClient("http://" + *node)
+	client := cluster.NewLocalClient("http://"+*node, 1)
 
 	meta, err := client.StreamsMetadata()
 	if err != nil {

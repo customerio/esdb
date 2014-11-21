@@ -15,11 +15,35 @@ import (
 type Client struct {
 	Nodes  []string
 	Leader string
+	conns  pool
 	quit   bool
 }
 
 type LocalClient struct {
-	Node string
+	Node  string
+	conns pool
+}
+
+type pool struct {
+	conns chan bool
+}
+
+func newPool(concurrency int) pool {
+	conns := make(chan bool, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		conns <- true
+	}
+
+	return pool{conns}
+}
+
+func (p *pool) get() {
+	<-p.conns
+}
+
+func (p *pool) release() {
+	p.conns <- true
 }
 
 type OffsetResponse struct {
@@ -27,10 +51,11 @@ type OffsetResponse struct {
 	Metadata     Metadata `json:"meta"`
 }
 
-func NewClient(node string) *Client {
+func NewClient(node string, concurrency int) *Client {
 	c := &Client{
 		Nodes:  []string{node},
 		Leader: node,
+		conns:  newPool(concurrency),
 	}
 
 	go (func() {
@@ -48,11 +73,14 @@ func NewClient(node string) *Client {
 	return c
 }
 
-func NewLocalClient(node string) *LocalClient {
-	return &LocalClient{Node: node}
+func NewLocalClient(node string, concurrency int) *LocalClient {
+	return &LocalClient{Node: node, conns: newPool(concurrency)}
 }
 
 func (c *LocalClient) StreamsMetadata() (*Metadata, error) {
+	c.conns.get()
+	defer c.conns.release()
+
 	resp, err := http.Get(c.Node + "/events/meta")
 	if err != nil {
 		return nil, err
@@ -71,6 +99,9 @@ func (c *LocalClient) StreamsMetadata() (*Metadata, error) {
 }
 
 func (c *LocalClient) Offset(index, value string) (*Metadata, string, error) {
+	c.conns.get()
+	defer c.conns.release()
+
 	dest, err := url.Parse(c.Node)
 	if err != nil {
 		return nil, "", err
@@ -100,6 +131,9 @@ func (c *LocalClient) Offset(index, value string) (*Metadata, string, error) {
 }
 
 func (c *Client) Compress(start, stop uint64) error {
+	c.conns.get()
+	defer c.conns.release()
+
 	reader := strings.NewReader("")
 	resp, err := http.Post(c.Leader+"/events/compress/"+strconv.FormatUint(start, 10)+"/"+strconv.FormatUint(stop, 10), "application/json", reader)
 
@@ -126,6 +160,9 @@ func (c *Client) Compress(start, stop uint64) error {
 }
 
 func (c *Client) Event(content []byte, indexes map[string]string) error {
+	c.conns.get()
+	defer c.conns.release()
+
 	body, _ := json.Marshal(map[string]interface{}{
 		"body":    string(content),
 		"indexes": indexes,
