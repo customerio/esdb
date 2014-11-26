@@ -38,7 +38,7 @@ func main() {
 
 	log.SetFlags(log.LstdFlags)
 
-	client := cluster.NewLocalClient("http://"+*node, 50)
+	client := cluster.NewLocalClient("http://"+*node, 1)
 	reader := cluster.NewReader(flag.Arg(0))
 	streams := make(map[uint64]stream.Stream)
 
