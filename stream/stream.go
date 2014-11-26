@@ -3,7 +3,6 @@ package stream
 import (
 	"io"
 	"os"
-	"sync"
 
 	"github.com/customerio/esdb/binary"
 )
@@ -28,11 +27,7 @@ type request struct {
 	offset int64
 	event  *Event
 	err    error
-	done   chan request
 }
-
-var initQueue sync.Once
-var queue chan<- request
 
 type Stream interface {
 	Write(data []byte, indexes map[string]string) (int, error)
@@ -48,8 +43,6 @@ type Stream interface {
 // Creates a new open stream at the given path. If the
 // file already exists, an error will be returned.
 func New(path string) (Stream, error) {
-	setupReadQueue()
-
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0755)
 	if err != nil {
 		return nil, err
@@ -59,8 +52,6 @@ func New(path string) (Stream, error) {
 }
 
 func Open(path string) (Stream, error) {
-	setupReadQueue()
-
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -80,36 +71,18 @@ func Open(path string) (Stream, error) {
 	}
 }
 
-func setupReadQueue() {
-	initQueue.Do(func() {
-		q := make(chan request)
-
-		go (func() {
-			for req := range q {
-				req.event, req.err = pullEvent(req.reader, req.offset)
-				req.done <- req
-			}
-		})()
-
-		queue = q
-	})
-}
-
 func scanIndex(s Stream, index string, offset int64, scanner Scanner) error {
-	done := make(chan request)
-
 	for offset > 0 {
-		queue <- request{reader: s.reader(), offset: offset, done: done}
-		req := <-done
+		event, err := pullEvent(s.reader(), offset)
 
-		if req.err == nil {
-			offset = req.event.offsets[index]
+		if err == nil {
+			offset = event.offsets[index]
 
-			if !scanner(req.event) {
+			if !scanner(event) {
 				offset = 0
 			}
 		} else {
-			return req.err
+			return err
 		}
 	}
 
@@ -127,22 +100,19 @@ func iterate(s Stream, offset int64, scanner Scanner) (int64, error) {
 		offset = HEADER_LENGTH
 	}
 
-	done := make(chan request)
-
 	var err error
 
 	for err == nil {
-		queue <- request{reader: s.reader(), offset: offset, done: done}
-		req := <-done
+		event, e := pullEvent(s.reader(), offset)
 
-		if req.err == nil {
-			offset += int64(req.event.length())
+		if e == nil {
+			offset += int64(event.length())
 
-			if !scanner(req.event) {
+			if !scanner(event) {
 				err = io.EOF
 			}
 		} else {
-			err = req.err
+			err = e
 		}
 	}
 
