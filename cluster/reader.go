@@ -30,12 +30,12 @@ func NewReader(path string) *Reader {
 	}
 }
 
-func (r *Reader) Scan(name, value, continuation string, scanner stream.Scanner) (string, error) {
+func (r *Reader) Scan(name, value string, after uint64, continuation string, scanner stream.Scanner) (string, error) {
 	var stopped bool
 
 	commit, offset := r.parseContinuation(continuation, true)
 
-	for !stopped && commit > 0 {
+	for !stopped && commit > after {
 		s, err := r.retrieveStream(commit, true)
 		if err != nil {
 			return "", err
@@ -64,24 +64,26 @@ func (r *Reader) Scan(name, value, continuation string, scanner stream.Scanner) 
 	return r.buildContinuation(commit, offset), nil
 }
 
-func (r *Reader) Iterate(continuation string, scanner stream.Scanner) (string, error) {
+func (r *Reader) Iterate(after uint64, continuation string, scanner stream.Scanner) (string, error) {
 	var stopped bool
 
 	commit, offset := r.parseContinuation(continuation, false)
 
 	for !stopped && commit > 0 {
-		s, err := r.retrieveStream(commit, true)
-		if err != nil {
-			return "", err
-		}
+		if commit > after {
+			s, err := r.retrieveStream(commit, true)
+			if err != nil {
+				return "", err
+			}
 
-		offset, err = s.Iterate(offset, func(e *stream.Event) bool {
-			stopped = !scanner(e)
-			return !stopped
-		})
+			offset, err = s.Iterate(offset, func(e *stream.Event) bool {
+				stopped = !scanner(e)
+				return !stopped
+			})
 
-		if err != nil {
-			return "", err
+			if err != nil {
+				return "", err
+			}
 		}
 
 		if !stopped {

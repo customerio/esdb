@@ -50,6 +50,7 @@ func main() {
 
 		index := req.FormValue("index")
 		value := req.FormValue("value")
+		after, _ := strconv.ParseInt(req.FormValue("after"), 10, 64)
 		continuation := req.FormValue("continuation")
 		limit, _ := strconv.Atoi(req.FormValue("limit"))
 
@@ -75,13 +76,13 @@ func main() {
 				continuation = con
 			}
 
-			continuation, err = reader.Scan(index, value, continuation, func(e *stream.Event) bool {
+			continuation, err = reader.Scan(index, value, after, continuation, func(e *stream.Event) bool {
 				count += 1
 				events = append(events, string(e.Data))
 				return count < limit
 			})
 		} else {
-			continuation, err = reader.Iterate(continuation, func(e *stream.Event) bool {
+			continuation, err = reader.Iterate(after, continuation, func(e *stream.Event) bool {
 				count += 1
 				events = append(events, string(e.Data))
 				return count < limit

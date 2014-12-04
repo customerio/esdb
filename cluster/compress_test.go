@@ -70,7 +70,7 @@ func TestCompression(t *testing.T) {
 
 		found := make([]string, 0)
 
-		_, err := n.db.Scan("a", "b", "", func(e *stream.Event) bool {
+		_, err := n.db.Scan("a", "b", 0, "", func(e *stream.Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})
@@ -90,7 +90,7 @@ func TestCompression(t *testing.T) {
 
 		found = make([]string, 0)
 
-		_, err = n.db.Iterate("", func(e *stream.Event) bool {
+		_, err = n.db.Iterate(0, "", func(e *stream.Event) bool {
 			found = append(found, string(e.Data))
 			return true
 		})

@@ -81,6 +81,7 @@ func scan(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interfa
 
 	index := req.FormValue("index")
 	value := req.FormValue("value")
+	after, _ := strconv.ParseInt(req.FormValue("after"), 10, 64)
 	continuation := req.FormValue("continuation")
 	limit, _ := strconv.Atoi(req.FormValue("limit"))
 
@@ -91,13 +92,13 @@ func scan(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interfa
 	}
 
 	if index != "" {
-		continuation, err = n.db.Scan(index, value, continuation, func(e *stream.Event) bool {
+		continuation, err = n.db.Scan(index, value, uint64(after), continuation, func(e *stream.Event) bool {
 			count += 1
 			events = append(events, string(e.Data))
 			return count < limit
 		})
 	} else {
-		continuation, err = n.db.Iterate(continuation, func(e *stream.Event) bool {
+		continuation, err = n.db.Iterate(uint64(after), continuation, func(e *stream.Event) bool {
 			count += 1
 			events = append(events, string(e.Data))
 			return count < limit
