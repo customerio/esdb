@@ -61,6 +61,10 @@ func (r *Reader) Scan(name, value string, after uint64, continuation string, sca
 		commit = r.Prev(commit)
 	}
 
+	if commit <= after {
+		commit = 0
+	}
+
 	return r.buildContinuation(commit, offset), nil
 }
 

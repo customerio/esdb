@@ -17,11 +17,13 @@ type Client struct {
 	Leader string
 	conns  pool
 	quit   bool
+  client *http.Client
 }
 
 type LocalClient struct {
 	Node  string
 	conns pool
+  client *http.Client
 }
 
 type pool struct {
@@ -56,6 +58,7 @@ func NewClient(node string, concurrency int) *Client {
 		Nodes:  []string{node},
 		Leader: node,
 		conns:  newPool(concurrency),
+    client: &http.Client{Timeout: 30 * time.Second},
 	}
 
 	go (func() {
@@ -74,14 +77,14 @@ func NewClient(node string, concurrency int) *Client {
 }
 
 func NewLocalClient(node string, concurrency int) *LocalClient {
-	return &LocalClient{Node: node, conns: newPool(concurrency)}
+	return &LocalClient{Node: node, conns: newPool(concurrency), client: &http.Client{Timeout: 30 * time.Second}}
 }
 
 func (c *LocalClient) StreamsMetadata() (*Metadata, error) {
 	c.conns.get()
 	defer c.conns.release()
 
-	resp, err := http.Get(c.Node + "/events/meta")
+	resp, err := c.client.Get(c.Node + "/events/meta")
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +116,7 @@ func (c *LocalClient) Offset(index, value string) (*Metadata, string, error) {
 	parameters.Add("value", value)
 	dest.RawQuery = parameters.Encode()
 
-	resp, err := http.Get(dest.String())
+	resp, err := c.client.Get(dest.String())
 	if err != nil {
 		return nil, "", err
 	}
@@ -135,7 +138,7 @@ func (c *Client) Compress(start, stop uint64) error {
 	defer c.conns.release()
 
 	reader := strings.NewReader("")
-	resp, err := http.Post(c.Leader+"/events/compress/"+strconv.FormatUint(start, 10)+"/"+strconv.FormatUint(stop, 10), "application/json", reader)
+	resp, err := c.client.Post(c.Leader+"/events/compress/"+strconv.FormatUint(start, 10)+"/"+strconv.FormatUint(stop, 10), "application/json", reader)
 
 	if err != nil {
 		if len(c.Nodes) == 1 && c.Nodes[0] == c.Leader {
@@ -170,7 +173,7 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 
 	reader := strings.NewReader(string(body))
 
-	resp, err := http.Post(c.Leader+"/events", "application/json", reader)
+	resp, err := c.client.Post(c.Leader+"/events", "application/json", reader)
 	if err != nil {
 		if len(c.Nodes) == 1 && c.Nodes[0] == c.Leader {
 			return err
@@ -198,7 +201,7 @@ func (c *Client) Close() {
 }
 
 func (c *Client) refreshNodes() error {
-	resp, err := http.Get(c.Nodes[0] + "/cluster/status")
+	resp, err := c.client.Get(c.Nodes[0] + "/cluster/status")
 	if err != nil {
 		return err
 	}
