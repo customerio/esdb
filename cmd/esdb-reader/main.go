@@ -76,13 +76,13 @@ func main() {
 				continuation = con
 			}
 
-			continuation, err = reader.Scan(index, value, after, continuation, func(e *stream.Event) bool {
+			continuation, err = reader.Scan(index, value, uint64(after), continuation, func(e *stream.Event) bool {
 				count += 1
 				events = append(events, string(e.Data))
 				return count < limit
 			})
 		} else {
-			continuation, err = reader.Iterate(after, continuation, func(e *stream.Event) bool {
+			continuation, err = reader.Iterate(uint64(after), continuation, func(e *stream.Event) bool {
 				count += 1
 				events = append(events, string(e.Data))
 				return count < limit

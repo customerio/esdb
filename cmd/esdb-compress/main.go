@@ -30,7 +30,7 @@ func main() {
 		log.Fatal("start and stop commits are required")
 	}
 
-	client := cluster.NewClient("http://" + *node)
+	client := cluster.NewClient("http://" + *node, 1)
 
 	if err := client.Compress(*start, *stop); err != nil {
 		log.Fatal(err)
