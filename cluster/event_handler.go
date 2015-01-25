@@ -1,9 +1,12 @@
 package cluster
 
 import (
+	"log"
+
 	"github.com/customerio/esdb/stream"
 
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -18,16 +21,21 @@ func (n *Node) eventHandler(w http.ResponseWriter, req *http.Request) {
 	res := make(map[string]interface{})
 	var err error
 
+	log.Println(req.Method, req.URL)
+
 	switch req.Method {
 	case "POST":
 		res, err = index(n, w, req)
 	case "GET":
 		res, err = scan(n, w, req)
 	default:
+		log.Println(req.Method, req.URL, 404)
 		w.WriteHeader(404)
 	}
 
 	if err != nil {
+		log.Println(req.Method, req.URL, 500, err)
+		w.WriteHeader(500)
 		res["error"] = err.Error()
 	}
 
@@ -42,27 +50,31 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 	data := &event{}
 
 	body, err := ioutil.ReadAll(req.Body)
-	if err == nil {
-		err = json.Unmarshal(body, data)
-	} else {
-		w.WriteHeader(400)
+	if err != nil {
+		return map[string]interface{}{}, errors.New("Error reading request body")
 	}
 
-	if err == nil {
-		err = n.Event([]byte(data.Body), data.Indexes)
+	err = json.Unmarshal(body, data)
+	if err != nil {
+		log.Println(req.Method, req.URL, 400, "Malformed body:", string(body))
+		w.WriteHeader(400)
+		return map[string]interface{}{}, nil
+	}
 
-		if err == NOT_LEADER_ERROR {
-			var uri string
-			uri, err = n.LeaderConnectionString()
-			w.Header().Set("Cluster-Leader", uri)
+	err = n.Event([]byte(data.Body), data.Indexes)
+
+	if err == NOT_LEADER_ERROR {
+		var uri string
+		uri, err = n.LeaderConnectionString()
+		w.Header().Set("Cluster-Leader", uri)
+
+		if err != nil {
+			return map[string]interface{}{}, err
+		} else {
+			log.Println(req.Method, req.URL, 400, "Not leader")
 			w.WriteHeader(400)
-
-			if err == nil {
-				return map[string]interface{}{}, NOT_LEADER_ERROR
-			}
+			return map[string]interface{}{}, nil
 		}
-	} else {
-		w.WriteHeader(500)
 	}
 
 	if err != nil {
@@ -103,10 +115,6 @@ func scan(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interfa
 			events = append(events, string(e.Data))
 			return count < limit
 		})
-	}
-
-	if err != nil {
-		w.WriteHeader(500)
 	}
 
 	return map[string]interface{}{

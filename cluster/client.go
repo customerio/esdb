@@ -2,7 +2,9 @@ package cluster
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -17,13 +19,13 @@ type Client struct {
 	Leader string
 	conns  pool
 	quit   bool
-  client *http.Client
+	client *http.Client
 }
 
 type LocalClient struct {
-	Node  string
-	conns pool
-  client *http.Client
+	Node   string
+	conns  pool
+	client *http.Client
 }
 
 type pool struct {
@@ -58,7 +60,7 @@ func NewClient(node string, concurrency int) *Client {
 		Nodes:  []string{node},
 		Leader: node,
 		conns:  newPool(concurrency),
-    client: &http.Client{Timeout: 30 * time.Second},
+		client: &http.Client{Timeout: 30 * time.Second},
 	}
 
 	go (func() {
@@ -91,6 +93,10 @@ func (c *LocalClient) StreamsMetadata() (*Metadata, error) {
 
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		return nil, parseError(resp.Body)
+	}
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -122,6 +128,10 @@ func (c *LocalClient) Offset(index, value string) (*Metadata, string, error) {
 	}
 
 	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, "", parseError(resp.Body)
+	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -159,6 +169,10 @@ func (c *Client) Compress(start, stop uint64) error {
 		return c.Compress(start, stop)
 	}
 
+	if resp.StatusCode != 200 {
+		return parseError(resp.Body)
+	}
+
 	return nil
 }
 
@@ -193,11 +207,20 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 		return c.Event(content, indexes)
 	}
 
+	if resp.StatusCode != 200 {
+		return parseError(resp.Body)
+	}
+
 	return nil
 }
 
 func (c *Client) Close() {
 	c.quit = true
+}
+
+func parseError(body io.Reader) error {
+	b, _ := ioutil.ReadAll(body)
+	return errors.New("Bad response from log: " + string(b))
 }
 
 func (c *Client) refreshNodes() error {

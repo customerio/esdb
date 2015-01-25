@@ -12,19 +12,30 @@ type RestServer struct {
 	stop   chan bool
 }
 
+func Log(handler func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r.Method, r.URL)
+		handler(w, r)
+	}
+}
+
 func NewRestServer(n *Node) *RestServer {
 	rpc.RegisterName("Node", &NodeRPC{n})
 	rpc.HandleHTTP()
 
-	n.HandleFunc("/cluster/status", n.clusterStatusHandler)
-	n.HandleFunc("/cluster/remove/", n.clusterRemoveHandler)
+	n.HandleFunc("/cluster/status", Log(n.clusterStatusHandler))
+	n.HandleFunc("/cluster/remove/", Log(n.clusterRemoveHandler))
 
 	n.HandleFunc("/events", n.eventHandler)
-	n.HandleFunc("/events/meta", n.metaEventsHandler)
-	n.HandleFunc("/events/offset", n.offsetEventsHandler)
-	n.HandleFunc("/events/compress/", n.compressEventsHandler)
+	n.HandleFunc("/events/meta", Log(n.metaEventsHandler))
+	n.HandleFunc("/events/offset", Log(n.offsetEventsHandler))
+	n.HandleFunc("/events/compress/", Log(n.compressEventsHandler))
 
-	n.HandleFunc("/stream/", n.recoverHandler)
+	n.HandleFunc("/stream/", Log(n.recoverHandler))
+
+	n.HandleFunc("/", Log(func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(404)
+	}))
 
 	return &RestServer{
 		fmt.Sprintf("%s:%d", n.host, n.port),
