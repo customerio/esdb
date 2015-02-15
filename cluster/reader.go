@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"github.com/customerio/esdb/stream"
+	"github.com/customerio/farm"
 
 	"fmt"
 	"math"
@@ -28,6 +29,56 @@ func NewReader(path string) *Reader {
 		streams: make(map[uint64]stream.Stream),
 		mutexes: make(map[uint64]*sync.Mutex),
 	}
+}
+
+func (r *Reader) ScanAll(name, value string, after uint64, scanner stream.Scanner) error {
+	var stopped bool
+
+	commit, _ := r.parseContinuation("", true)
+
+	events := make(chan *stream.Event)
+
+	runner := farm.Run(
+		20,
+		func(in chan<- interface{}) error {
+			for commit > after {
+				in <- commit
+				commit = r.Prev(commit)
+			}
+
+			return nil
+		},
+		func(in interface{}) (interface{}, error) {
+			current := in.(uint64)
+
+			s, err := r.retrieveStream(current, true)
+			if err != nil {
+				return nil, err
+			}
+
+			err = s.ScanIndex(name, value, 0, func(e *stream.Event) bool {
+				events <- e
+				return !stopped
+			})
+
+			return nil, err
+		},
+	)
+
+	go (func() {
+		for e := range events {
+			if !stopped {
+				stopped = !scanner(e)
+			}
+		}
+	})()
+
+	for _ = range runner.Results {
+	}
+
+	close(events)
+
+	return <-runner.Errors
 }
 
 func (r *Reader) Scan(name, value string, after uint64, continuation string, scanner stream.Scanner) (string, error) {

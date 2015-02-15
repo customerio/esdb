@@ -133,6 +133,11 @@ func (db *DB) Rotate(commit, term uint64) error {
 	return nil
 }
 
+func (db *DB) ScanAll(name, value string, after uint64, scanner stream.Scanner) error {
+	db.reader.Update(db.peerConnectionStrings(), db.closed, db.current, db.stream)
+	return db.reader.ScanAll(name, value, after, scanner)
+}
+
 func (db *DB) Scan(name, value string, after uint64, continuation string, scanner stream.Scanner) (string, error) {
 	db.reader.Update(db.peerConnectionStrings(), db.closed, db.current, db.stream)
 	return db.reader.Scan(name, value, after, continuation, scanner)
