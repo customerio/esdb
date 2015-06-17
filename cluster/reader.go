@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"sync/atomic"
+
 	"github.com/customerio/esdb/stream"
 	"github.com/customerio/farm"
 
@@ -32,7 +34,7 @@ func NewReader(path string) *Reader {
 }
 
 func (r *Reader) ScanAll(name, value string, after uint64, scanner stream.Scanner) error {
-	var stopped bool
+	var stopped int32
 
 	commit, _ := r.parseContinuation("", true)
 
@@ -58,22 +60,28 @@ func (r *Reader) ScanAll(name, value string, after uint64, scanner stream.Scanne
 
 			err = s.ScanIndex(name, value, 0, func(e *stream.Event) bool {
 				events <- e
-				return !stopped
+				return atomic.LoadInt32(&stopped) == 0
 			})
 
 			return nil, err
 		},
 	)
 
-	go (func() {
-		for e := range events {
-			if !stopped {
-				stopped = !scanner(e)
+loop:
+	for {
+		select {
+		case _, ok := <-runner.Results:
+			if !ok {
+				break loop
+			}
+
+		case e := <-events:
+			if atomic.LoadInt32(&stopped) == 0 {
+				if !scanner(e) {
+					atomic.StoreInt32(&stopped, 1)
+				}
 			}
 		}
-	})()
-
-	for _ = range runner.Results {
 	}
 
 	close(events)
