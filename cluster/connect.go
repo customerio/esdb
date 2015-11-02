@@ -36,6 +36,7 @@ func Connect(n *Node, existing string) error {
 func initRaft(n *Node) (raft.Server, error) {
 	registerCommands.Do(func() {
 		raft.RegisterCommand(&EventCommand{})
+		raft.RegisterCommand(&EventsCommand{})
 		raft.RegisterCommand(&CompressCommand{})
 	})
 

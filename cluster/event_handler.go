@@ -47,21 +47,34 @@ func (n *Node) eventHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interface{}, error) {
-	data := &event{}
+	var data []*event
 
 	body, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		return map[string]interface{}{}, errors.New("Error reading request body")
 	}
 
-	err = json.Unmarshal(body, data)
+	err = json.Unmarshal(body, &data)
 	if err != nil {
 		log.Println(req.Method, req.URL, 400, "Malformed body:", string(body))
 		w.WriteHeader(400)
 		return map[string]interface{}{}, nil
 	}
 
-	err = n.Event([]byte(data.Body), data.Indexes)
+	bodies := make([][]byte, len(data))
+	indexes := make([]map[string]string, len(data))
+	events := make([]map[string]interface{}, len(data))
+
+	for i, d := range data {
+		bodies[i] = []byte(d.Body)
+		indexes[i] = d.Indexes
+		events[i] = map[string]interface{}{
+			"event":   d.Body,
+			"indexes": d.Indexes,
+		}
+	}
+
+	err = n.Events(bodies, indexes)
 
 	if err == NOT_LEADER_ERROR {
 		var uri string
@@ -81,8 +94,7 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 		return map[string]interface{}{}, err
 	} else {
 		return map[string]interface{}{
-			"event":   data.Body,
-			"indexes": data.Indexes,
+			"events": events,
 		}, nil
 	}
 }

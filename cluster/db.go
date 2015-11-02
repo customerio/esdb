@@ -98,6 +98,37 @@ func (db *DB) Write(commit uint64, body []byte, indexes map[string]string, times
 	return nil
 }
 
+func (db *DB) WriteAll(commit uint64, bodies [][]byte, indexes []map[string]string, timestamp int64) error {
+	if commit <= db.current {
+		// old commit
+		return nil
+	}
+
+	if db.stream == nil {
+		for i, body := range bodies {
+			bytes, _ := stream.Serialize(body, indexes[i], map[string]int64{})
+			db.mockoffset += int64(len(bytes))
+		}
+
+		return nil
+	}
+
+	db.wtimer.Time(func() {
+		for i, body := range bodies {
+			_, err := db.stream.Write(body, indexes[i])
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+
+	if timestamp > db.MostRecent {
+		db.MostRecent = timestamp
+	}
+
+	return nil
+}
+
 func (db *DB) Rotate(commit, term uint64) error {
 	s, err := db.retrieveStream(commit, false)
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {

@@ -214,6 +214,50 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 	return nil
 }
 
+func (c *Client) Events(contents [][]byte, indexes []map[string]string) error {
+	c.conns.get()
+	defer c.conns.release()
+
+	m := make([]map[string]interface{}, len(contents))
+
+	for i, content := range contents {
+		m[i] = map[string]interface{}{
+			"body":    string(content),
+			"indexes": indexes[i],
+		}
+	}
+
+	body, _ := json.Marshal(m)
+
+	reader := strings.NewReader(string(body))
+
+	resp, err := c.client.Post(c.Leader+"/events", "application/json", reader)
+	if err != nil {
+		if len(c.Nodes) == 1 && c.Nodes[0] == c.Leader {
+			return err
+		}
+
+		c.Leader = c.Nodes[rand.Intn(len(c.Nodes))]
+		fmt.Println("error when connecting to leader", err, "switching to", c.Leader)
+		return c.Events(contents, indexes)
+	}
+
+	defer resp.Body.Close()
+
+	leader := resp.Header.Get("Cluster-Leader")
+
+	if resp.StatusCode == 400 && leader != "" {
+		c.Leader = leader
+		return c.Events(contents, indexes)
+	}
+
+	if resp.StatusCode != 200 {
+		return parseError(resp.Body)
+	}
+
+	return nil
+}
+
 func (c *Client) Close() {
 	c.quit = true
 }

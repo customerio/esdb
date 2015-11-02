@@ -125,6 +125,20 @@ func (n *Node) Event(body []byte, indexes map[string]string) (err error) {
 	return
 }
 
+func (n *Node) Events(bodies [][]byte, indexes []map[string]string) (err error) {
+	if n.raft == nil {
+		return errors.New("Raft not yet initialized")
+	}
+
+	if n.raft.State() == "leader" {
+		_, err = n.raft.Do(NewEventsCommand(bodies, indexes, time.Now().UnixNano()))
+	} else {
+		err = NOT_LEADER_ERROR
+	}
+
+	return
+}
+
 func (n *Node) Compress(start, stop uint64) (err error) {
 	if n.raft == nil {
 		return errors.New("Raft not yet initialized")
