@@ -56,7 +56,7 @@ func index(n *Node, w http.ResponseWriter, req *http.Request) (map[string]interf
 
 	err = json.Unmarshal(body, &data)
 	if err != nil {
-		log.Println(req.Method, req.URL, 400, "Malformed body:", string(body))
+		log.Println(req.Method, req.URL, 400, "Malformed body:", string(body), err)
 		w.WriteHeader(400)
 		return map[string]interface{}{}, nil
 	}
