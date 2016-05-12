@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/dgryski/go-csnappy"
@@ -92,7 +93,11 @@ func (r *Reader) fetchBlock() (err error) {
 	}
 
 	body := make([]byte, length)
-	n, _ := r.scratch.Read(body)
+	n, err := r.scratch.Read(body)
+
+	if n == 0 || err != nil {
+		return fmt.Errorf("Error reading block. %d %d %d %v", length, encoding, n, err)
+	}
 
 	if encoding == SNAPPY_COMPRESSION {
 		body, _ := csnappy.Decode(nil, body[:n])
