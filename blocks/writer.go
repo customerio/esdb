@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+
 	"github.com/dgryski/go-csnappy"
 )
 
@@ -67,13 +68,11 @@ func (w *Writer) Flush() (n int, err error) {
 }
 
 func (w *Writer) flush(size int) (n int, err error) {
-
 	var i int
 
 	// If we have enough buffered bytes, let's compress
 	// the data and write it out to the underlying io.Writer.
 	for w.buffer.Len() > size {
-
 		block := w.buffer.Next(w.blockSize)
 		var encoding = NO_COMPRESSION
 
@@ -133,9 +132,9 @@ func headerLen(blockSize int) int {
 // for every block), this is a bit convoluted.
 // Is there a better way?
 func fixedInt(blockSize, size int) (ret interface{}) {
-	if blockSize <= 65536 {
+	if blockSize < 65536 {
 		ret = uint16(size)
-	} else if blockSize <= 4294967296 {
+	} else if blockSize < 4294967296 {
 		ret = uint32(size)
 	} else {
 		ret = uint64(size)
