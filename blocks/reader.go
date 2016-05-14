@@ -94,9 +94,16 @@ func (r *Reader) fetchBlock() (err error) {
 	}
 
 	head := make([]byte, headerLen(r.blockSize))
-	r.scratch.Read(head)
+	n, err := r.scratch.Read(head)
+	if n == 0 || err != nil {
+		return fmt.Errorf("Error reading block header. %d %v", n, err)
+	}
 
 	length, encoding := r.parseHeader(head)
+
+	if length == 0 {
+		return
+	}
 
 	err = r.ensureScratch(length)
 	if err != nil {
@@ -104,7 +111,7 @@ func (r *Reader) fetchBlock() (err error) {
 	}
 
 	body := make([]byte, length)
-	n, err := r.scratch.Read(body)
+	n, err = r.scratch.Read(body)
 
 	if n == 0 || err != nil {
 		return fmt.Errorf("Error reading block. %d %d %d %v", length, encoding, n, err)
