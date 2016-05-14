@@ -38,13 +38,20 @@ func NewReader(r io.ReadSeeker, blockSize int) *Reader {
 
 // Implements io.Reader interface.
 func (r *Reader) Read(p []byte) (n int, err error) {
-	r.ensure(len(p))
+	err = r.ensure(len(p))
+	if err != nil {
+		return
+	}
+
 	return r.buffer.Read(p)
 }
 
 // Implements io.ByteReader interface.
 func (r *Reader) ReadByte() (c byte, err error) {
-	r.ensure(1)
+	err = r.ensure(1)
+	if err != nil {
+		return
+	}
 
 	b := make([]byte, 1)
 
@@ -65,6 +72,10 @@ func (r *Reader) Peek(n int) []byte {
 func (r *Reader) ensure(length int) (err error) {
 	for r.buffer.Len() < length {
 		err = r.fetchBlock()
+
+		if err == io.EOF {
+			return nil
+		}
 
 		if err != nil {
 			return
