@@ -179,7 +179,10 @@ func (c *Client) Compress(start, stop uint64) error {
 func (c *Client) Event(content []byte, indexes map[string]string) error {
 	c.conns.get()
 	defer c.conns.release()
+	return c.event(content, indexes)
+}
 
+func (c *Client) event(content []byte, indexes map[string]string) error {
 	body, _ := json.Marshal(map[string]interface{}{
 		"body":    string(content),
 		"indexes": indexes,
@@ -195,7 +198,7 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 
 		c.Leader = c.Nodes[rand.Intn(len(c.Nodes))]
 		fmt.Println("error when connecting to leader", err, "switching to", c.Leader)
-		return c.Event(content, indexes)
+		return c.event(content, indexes)
 	}
 
 	defer resp.Body.Close()
@@ -204,7 +207,7 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 
 	if resp.StatusCode == 400 && leader != "" {
 		c.Leader = leader
-		return c.Event(content, indexes)
+		return c.event(content, indexes)
 	}
 
 	if resp.StatusCode != 200 {
@@ -217,7 +220,10 @@ func (c *Client) Event(content []byte, indexes map[string]string) error {
 func (c *Client) Events(contents [][]byte, indexes []map[string]string) error {
 	c.conns.get()
 	defer c.conns.release()
+	return c.events(contents, indexes)
+}
 
+func (c *Client) events(contents [][]byte, indexes []map[string]string) error {
 	m := make([]map[string]interface{}, len(contents))
 
 	for i, content := range contents {
@@ -239,7 +245,7 @@ func (c *Client) Events(contents [][]byte, indexes []map[string]string) error {
 
 		c.Leader = c.Nodes[rand.Intn(len(c.Nodes))]
 		fmt.Println("error when connecting to leader", err, "switching to", c.Leader)
-		return c.Events(contents, indexes)
+		return c.events(contents, indexes)
 	}
 
 	defer resp.Body.Close()
@@ -248,7 +254,7 @@ func (c *Client) Events(contents [][]byte, indexes []map[string]string) error {
 
 	if resp.StatusCode == 400 && leader != "" {
 		c.Leader = leader
-		return c.Events(contents, indexes)
+		return c.events(contents, indexes)
 	}
 
 	if resp.StatusCode != 200 {
