@@ -6,8 +6,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dgryski/go-csnappy"
 	"encoding/binary"
+
+	"github.com/dgryski/go-csnappy"
 )
 
 func ExampleWriter() {
@@ -36,7 +37,7 @@ func TestWriterSmallBlockSize(t *testing.T) {
 		t.Errorf("Wrong response for flush: want: 11,<nil> got: %d,%v", n, err)
 	}
 
-	c1, _ := csnappy.Encode(nil, []byte("helloworldhelloworldhelloworldhe"))
+	c1 := csnappy.Encode(nil, []byte("helloworldhelloworldhelloworldhe"))
 
 	expected := []byte(
 		"\x0f\x00\x01" + string(c1) + "\x08\x00\x00lloworld",
@@ -139,7 +140,7 @@ func TestMixedBlockCompression(t *testing.T) {
 
 	compressable := []byte{}
 
-	for i:=0; i<256; i++ {
+	for i := 0; i < 256; i++ {
 		compressable = append(compressable, 0x00)
 	}
 
@@ -155,7 +156,7 @@ func TestMixedBlockCompression(t *testing.T) {
 	i := 0
 	encoded := []int{1, 1, 1, 1, 1, 1, 1, 1, 0, 0}
 
-	for buffer.Len() > 0{
+	for buffer.Len() > 0 {
 
 		n := fixedInt(32, 0)
 
@@ -175,7 +176,7 @@ func TestMixedBlockCompression(t *testing.T) {
 		block := make([]byte, size)
 		n, _ = buffer.Read(block)
 
-		i ++
+		i++
 	}
 
 }

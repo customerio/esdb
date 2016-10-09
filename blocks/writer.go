@@ -78,7 +78,7 @@ func (w *Writer) flush(size int) (n int, err error) {
 
 		// Data is only encoded if we successfully encode the block.
 		// Otherwise the block is identified as uncompressed.
-		if encoded, err := csnappy.Encode(nil, block); err == nil && len(encoded) <= len(block) {
+		if encoded := csnappy.Encode(nil, block); len(encoded) <= len(block) {
 			encoding = SNAPPY_COMPRESSION
 			block = encoded
 		}

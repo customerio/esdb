@@ -27,7 +27,7 @@ func TestWriteIndexBlocksSmall(t *testing.T) {
 		t.Errorf("Wrong written length: wanted: 36, found: %d", index.length)
 	}
 
-	compressed, _ := csnappy.Encode(nil, []byte(
+	compressed := csnappy.Encode(nil, []byte(
 		"\xF8\x00\x00\x00\x00\x00\x00\x00"+"\x00\x04"+
 			"\x00\x02\x00\x00\x00\x00\x00\x00"+"\x80\x00"+
 			"\x00\x08\x00\x00\x00\x00\x00\x00"+"\x00\x02"+
