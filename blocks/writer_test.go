@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"testing"
 
-	"encoding/binary"
+	"github.com/golang/snappy"
 
-	"github.com/dgryski/go-csnappy"
+	"encoding/binary"
 )
 
 func ExampleWriter() {
@@ -37,7 +37,7 @@ func TestWriterSmallBlockSize(t *testing.T) {
 		t.Errorf("Wrong response for flush: want: 11,<nil> got: %d,%v", n, err)
 	}
 
-	c1 := csnappy.Encode(nil, []byte("helloworldhelloworldhelloworldhe"))
+	c1 := snappy.Encode(nil, []byte("helloworldhelloworldhelloworldhe"))
 
 	expected := []byte(
 		"\x0f\x00\x01" + string(c1) + "\x08\x00\x00lloworld",

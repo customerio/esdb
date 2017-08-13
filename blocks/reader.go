@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dgryski/go-csnappy"
+	"github.com/google/snappy"
 )
 
 var BadSeek = errors.New("block reader can only seek relative to beginning of file.")
@@ -118,7 +118,7 @@ func (r *Reader) fetchBlock() (err error) {
 	}
 
 	if encoding == SNAPPY_COMPRESSION {
-		body, _ := csnappy.Decode(nil, body[:n])
+		body, _ := snappy.Decode(nil, body[:n])
 		r.buffer.Write(body)
 	} else {
 		r.buffer.Write(body[:n])

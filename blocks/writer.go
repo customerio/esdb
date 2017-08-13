@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/dgryski/go-csnappy"
+	"github.com/golang/snappy"
 )
 
 // Writer implements the io.Writer interface and is meant to be
@@ -78,7 +78,7 @@ func (w *Writer) flush(size int) (n int, err error) {
 
 		// Data is only encoded if we successfully encode the block.
 		// Otherwise the block is identified as uncompressed.
-		if encoded := csnappy.Encode(nil, block); len(encoded) <= len(block) {
+		if encoded := snappy.Encode(nil, block); len(encoded) <= len(block) {
 			encoding = SNAPPY_COMPRESSION
 			block = encoded
 		}

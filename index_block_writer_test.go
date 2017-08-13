@@ -8,7 +8,7 @@ import (
 
 	"github.com/customerio/esdb/binary"
 	"github.com/customerio/esdb/blocks"
-	"github.com/dgryski/go-csnappy"
+	"github.com/golang/snappy"
 )
 
 func TestWriteIndexBlocksSmall(t *testing.T) {
@@ -27,7 +27,7 @@ func TestWriteIndexBlocksSmall(t *testing.T) {
 		t.Errorf("Wrong written length: wanted: 36, found: %d", index.length)
 	}
 
-	compressed := csnappy.Encode(nil, []byte(
+	compressed := snappy.Encode(nil, []byte(
 		"\xF8\x00\x00\x00\x00\x00\x00\x00"+"\x00\x04"+
 			"\x00\x02\x00\x00\x00\x00\x00\x00"+"\x80\x00"+
 			"\x00\x08\x00\x00\x00\x00\x00\x00"+"\x00\x02"+
