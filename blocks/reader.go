@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/google/snappy"
+	"github.com/golang/snappy"
 )
 
 var BadSeek = errors.New("block reader can only seek relative to beginning of file.")
