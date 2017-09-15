@@ -99,7 +99,7 @@ func (r *Reader) fetchBlock() (err error) {
 		return fmt.Errorf("Error reading block header. %d %v", n, err)
 	}
 
-	length, encoding := r.parseHeader(head)
+	length, encoding := parseHeader(r.blockSize, head)
 
 	if length == 0 {
 		return
@@ -159,7 +159,7 @@ func (r *Reader) Seek(offset int64, whence int) (int64, error) {
 //
 // [uint16/uint32/uint64:blockLength][int8:encoding]
 //
-func (r *Reader) parseHeader(head []byte) (size uint, encoding int) {
+func parseHeader(blockSize int, head []byte) (size uint, encoding int) {
 	buf := bytes.NewReader(head)
 
 	// Read fixed uint block length based on the
@@ -168,7 +168,7 @@ func (r *Reader) parseHeader(head []byte) (size uint, encoding int) {
 	// block size, we need to parse out how long
 	// the fixed int is before reading it from the
 	// buffer.
-	n := fixedInt(r.blockSize, 0)
+	n := fixedInt(blockSize, 0)
 
 	if num, ok := n.(uint16); ok {
 		binary.Read(buf, binary.LittleEndian, &num)
