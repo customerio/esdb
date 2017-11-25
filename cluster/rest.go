@@ -23,7 +23,7 @@ func NewRestServer(n *Node) *RestServer {
 	rpc.RegisterName("Node", &NodeRPC{n})
 	rpc.HandleHTTP()
 
-	n.HandleFunc("/cluster/status", Log(n.clusterStatusHandler))
+	n.HandleFunc("/cluster/status", n.clusterStatusHandler)
 	n.HandleFunc("/cluster/remove/", Log(n.clusterRemoveHandler))
 
 	n.HandleFunc("/events", n.eventHandler)
