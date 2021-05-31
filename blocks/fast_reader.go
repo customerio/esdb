@@ -2,8 +2,10 @@ package blocks
 
 import (
 	"bytes"
-	"fmt"
+	"context"
+	"encoding/binary"
 	"io"
+	"sync"
 
 	"github.com/golang/snappy"
 )
@@ -17,21 +19,66 @@ type read struct {
 // data written via blocks.Writer. Reads ahead to decompress future
 // blocks before you need them to improve performance.
 type FastReader struct {
-	buffer          *bytes.Buffer
-	scratch         *bytes.Buffer
-	reads           chan read
-	readErr         error
-	reader          io.Reader
-	blockSize       int
-	readAheadBlocks int
+	buffer      *bytes.Buffer
+	scratch     *bytes.Buffer
+	reads       chan read
+	readErr     error
+	reader      io.Reader
+	blockSize   int
+	snapbuf     []byte
+	headerLen   int
+	parseHeader func(head []byte) (size uint, encoding int)
+	pool        *sync.Pool
 }
+
+// Any FastReader that uses the defaults will use this allocation pool.
+var (
+	DefaultHeaderLen = 3
+	DefaultBlockSize = 65535
+	pool             = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, DefaultHeaderLen+DefaultBlockSize)
+		},
+	}
+)
 
 // Version of blocks.Reader which reads ahead and decompresses future
 // blocks before you need them to improve performance.
-func NewFastReader(r io.Reader, blockSize int, readAheadBlocks int) *FastReader {
-	reader := &FastReader{new(bytes.Buffer), new(bytes.Buffer), make(chan read, 20), nil, r, blockSize, readAheadBlocks}
+func NewFastReader(ctx context.Context, r io.Reader, blockSize int) *FastReader {
+	var (
+		parseHeader func(head []byte) (size uint, encoding int)
+		headerLen   int
+	)
 
-	go reader.readAhead()
+	if blockSize < 65536 {
+		parseHeader = parseHeader16
+		headerLen = 3 // uint16 + byte
+	} else if blockSize < 4294967296 {
+		parseHeader = parseHeader32
+		headerLen = 5 // uint32 + byte
+	} else {
+		parseHeader = parseHeader64
+		headerLen = 9 // uint64 + byte
+	}
+
+	var p *sync.Pool
+	if headerLen == DefaultHeaderLen && blockSize == DefaultBlockSize {
+		p = &pool
+	}
+
+	reader := &FastReader{
+		buffer:      new(bytes.Buffer),
+		scratch:     new(bytes.Buffer),
+		reader:      r,
+		blockSize:   blockSize,
+		reads:       make(chan read, 10),
+		snapbuf:     make([]byte, 2*blockSize),
+		headerLen:   headerLen,
+		parseHeader: parseHeader,
+		pool:        p,
+	}
+
+	go reader.readAhead(ctx)
 
 	return reader
 }
@@ -53,11 +100,7 @@ func (r *FastReader) ReadByte() (c byte, err error) {
 		return
 	}
 
-	b := make([]byte, 1)
-
-	_, err = r.buffer.Read(b)
-	c = b[0]
-
+	c, err = r.buffer.ReadByte()
 	return
 }
 
@@ -88,19 +131,13 @@ func (r *FastReader) ensure(length int) (err error) {
 // Fetches the next block from the underlying reader,
 // optionally decompresses it, and adds it to the buffer.
 func (r *FastReader) fetchBlock() (err error) {
-	err = r.ensureScratch(uint(headerLen(r.blockSize)))
+	err = r.ensureScratch(uint(r.headerLen))
 	if err != nil {
 		return
 	}
 
-	head := make([]byte, headerLen(r.blockSize))
-	n, err := r.scratch.Read(head)
-	if n == 0 || err != nil {
-		return fmt.Errorf("Error reading block header. %d %v", n, err)
-	}
-
-	length, encoding := parseHeader(r.blockSize, head)
-
+	head := r.scratch.Next(r.headerLen)
+	length, encoding := r.parseHeader(head)
 	if length == 0 {
 		return
 	}
@@ -110,18 +147,13 @@ func (r *FastReader) fetchBlock() (err error) {
 		return
 	}
 
-	body := make([]byte, length)
-	n, err = r.scratch.Read(body)
-
-	if n == 0 || err != nil {
-		return fmt.Errorf("Error reading block. %d %d %d %v", length, encoding, n, err)
-	}
-
+	body := r.scratch.Next(int(length))
 	if encoding == SNAPPY_COMPRESSION {
-		body, _ := snappy.Decode(nil, body[:n])
+		body, _ := snappy.Decode(r.snapbuf, body)
+		r.snapbuf = body
 		r.buffer.Write(body)
 	} else {
-		r.buffer.Write(body[:n])
+		r.buffer.Write(body)
 	}
 
 	return
@@ -129,31 +161,85 @@ func (r *FastReader) fetchBlock() (err error) {
 
 // Ensure the raw scratch space contains at least `length` bytes.
 func (r *FastReader) ensureScratch(length uint) (err error) {
-	if uint(r.scratch.Len()) < length {
+	for uint(r.scratch.Len()) < length {
 		// If we read with an error, keep returning it
 		if r.readErr != nil {
 			return r.readErr
 		}
 
-		read := <-r.reads
-		r.scratch.Write(read.bytes)
-		r.readErr = read.err
-		err = read.err
+		rd, ok := <-r.reads
+		if !ok {
+			// If the read channel is closed we're done due to a
+			// context cancelation. Any other termination case would
+			// be a io.EOF error (or an actual reading error).
+			return context.Canceled
+		}
+		if len(rd.bytes) > 0 {
+			r.scratch.Write(rd.bytes)
+			if r.pool != nil {
+				r.pool.Put(rd.bytes)
+			}
+		}
+		r.readErr = rd.err
+		err = rd.err
 	}
 
 	return
 }
 
-func (r *FastReader) readAhead() {
-	var n int
-	var err error
-
-	for err == nil {
-		bytes := make([]byte, (headerLen(r.blockSize)+r.blockSize)*r.readAheadBlocks)
-		n, err = r.reader.Read(bytes)
-		r.reads <- read{bytes[:n], err}
+func (r *FastReader) readAhead(ctx context.Context) {
+	defer close(r.reads)
+	for {
+		var bytes []byte
+		if r.pool != nil {
+			bytes = pool.Get().([]byte)
+		} else {
+			bytes = make([]byte, r.headerLen+r.blockSize)
+		}
+		bytes = bytes[:cap(bytes)]
+		n, err := r.reader.Read(bytes)
+		bytes = bytes[:n]
+		select {
+		case r.reads <- read{bytes, err}:
+		case <-ctx.Done():
+			return
+		}
 		if err != nil {
-			close(r.reads)
+			return
 		}
 	}
+}
+
+// The header consists of two numbers.  The length of the
+// encoded/compressed block, and the encoding of the block data.
+
+// Parses out the header information from a fixed set of bytes.
+// The header format is described more fully in the blocks.Writer
+// documentation, but basically it's:
+//
+// [uint16/uint32/uint64:blockLength][int8:encoding]
+//
+
+func parseHeader16(head []byte) (size uint, encoding int) {
+	size = uint(binary.LittleEndian.Uint16(head))
+
+	// Read next byte which is the block encoding.
+	encoding = int(head[2])
+	return
+}
+
+func parseHeader32(head []byte) (size uint, encoding int) {
+	size = uint(binary.LittleEndian.Uint32(head))
+
+	// Read next byte which is the block encoding.
+	encoding = int(head[4])
+	return
+}
+
+func parseHeader64(head []byte) (size uint, encoding int) {
+	size = uint(binary.LittleEndian.Uint64(head))
+
+	// Read next byte which is the block encoding.
+	encoding = int(head[8])
+	return
 }

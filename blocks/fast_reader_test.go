@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"reflect"
@@ -9,9 +10,9 @@ import (
 )
 
 func ExampleFastReader() {
-	reader := NewFastReader(bytes.NewReader(
+	reader := NewFastReader(context.Background(), bytes.NewReader(
 		[]byte("\x05\x00\x00hello\x05\x00\x00 worl\x01\x00\x00d"),
-	), 5, 2)
+	), 5)
 
 	result := make([]byte, 11)
 	n, _ := reader.Read(result)
@@ -41,7 +42,7 @@ func TestFastRead(t *testing.T) {
 		w.Write([]byte(test.input))
 		w.Flush()
 
-		r := NewFastReader(bytes.NewReader(buffer.Bytes()), test.blockSize, 2)
+		r := NewFastReader(context.Background(), bytes.NewReader(buffer.Bytes()), test.blockSize)
 
 		var err error
 		var length int
@@ -74,7 +75,7 @@ func TestFastReadByte(t *testing.T) {
 	w.Write(data)
 	w.Flush()
 
-	r := NewFastReader(bytes.NewReader(buffer.Bytes()), 5, 2)
+	r := NewFastReader(context.Background(), bytes.NewReader(buffer.Bytes()), 5)
 
 	for i, expected := range data {
 		found, err := r.ReadByte()
