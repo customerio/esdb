@@ -81,7 +81,7 @@ func TestFastReadByte(t *testing.T) {
 		found, err := r.ReadByte()
 
 		if found != expected {
-			t.Errorf("Wrong byte for Case %d: want: %s got: %s", i, expected, found)
+			t.Errorf("Wrong byte for Case %d: want: %v got: %v", i, expected, found)
 		}
 
 		if err != nil {
