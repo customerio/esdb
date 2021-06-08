@@ -104,7 +104,7 @@ func TestWriteEventBlocksMedium(t *testing.T) {
 	}
 
 	if e := pullEvent(r); e != nil {
-		t.Errorf("Case %d: Found unexpected written event %v", e.Data)
+		t.Errorf("Found unexpected written event %v", e.Data)
 	}
 }
 
