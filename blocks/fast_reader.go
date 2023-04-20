@@ -196,6 +196,9 @@ func (r *FastReader) readAhead(ctx context.Context) {
 		} else {
 			bytes = make([]byte, r.headerLen+r.blockSize)
 		}
+		if cap(bytes) == 0 {
+			bytes = make([]byte, r.headerLen+r.blockSize)
+		}
 		bytes = bytes[:cap(bytes)]
 		n, err := r.reader.Read(bytes)
 		bytes = bytes[:n]
