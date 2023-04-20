@@ -196,8 +196,6 @@ func (r *FastReader) readAhead(ctx context.Context) {
 		} else {
 			bytes = make([]byte, r.headerLen+r.blockSize)
 		}
-		// profile export is getting stuck.
-		// https://github.com/customerio/opsbugs/issues/3341
 		if cap(bytes) == 0 {
 			bytes = make([]byte, r.headerLen+r.blockSize)
 		}
