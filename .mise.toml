@@ -1,0 +1,10 @@
+[settings]
+# needed for installing tools using go directly (go forge) as that is an experimental feature at the moment
+experimental = true
+
+[tools]
+go = '1.22.7'
+
+[tasks.test]
+alias="t"
+run = "go test -race -p 1 ./..."
