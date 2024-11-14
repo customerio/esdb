@@ -19,17 +19,18 @@ type read struct {
 // data written via blocks.Writer. Reads ahead to decompress future
 // blocks before you need them to improve performance.
 type FastReader struct {
-	buffer      *bytes.Buffer
-	scratch     *bytes.Buffer
-	reads       chan read
-	readErr     error
-	reader      io.Reader
-	blockSize   int
-	snapbuf     []byte
-	headerLen   int
-	parseHeader func(head []byte) (size uint, encoding int)
-	pool        *sync.Pool
-	readAheadWg sync.WaitGroup
+	buffer        *bytes.Buffer
+	scratch       *bytes.Buffer
+	reads         chan read
+	readErr       error
+	reader        io.Reader
+	blockSize     int
+	snapbuf       []byte
+	headerLen     int
+	parseHeader   func(head []byte) (size uint, encoding int)
+	pool          *sync.Pool
+	readAheadWg   sync.WaitGroup
+	readAheadDone chan bool // readAhead should exit on write/close
 }
 
 // Any FastReader that uses the defaults will use this allocation pool.
@@ -68,18 +69,18 @@ func NewFastReader(ctx context.Context, r io.Reader, blockSize int) *FastReader 
 	}
 
 	reader := &FastReader{
-		buffer:      new(bytes.Buffer),
-		scratch:     new(bytes.Buffer),
-		reader:      r,
-		blockSize:   blockSize,
-		reads:       make(chan read, 10),
-		snapbuf:     make([]byte, 2*blockSize),
-		headerLen:   headerLen,
-		parseHeader: parseHeader,
-		pool:        p,
+		buffer:        new(bytes.Buffer),
+		scratch:       new(bytes.Buffer),
+		reader:        r,
+		blockSize:     blockSize,
+		reads:         make(chan read, 10),
+		snapbuf:       make([]byte, 2*blockSize),
+		headerLen:     headerLen,
+		parseHeader:   parseHeader,
+		pool:          p,
+		readAheadDone: make(chan bool, 1),
 	}
 
-	// TODO: set up some cancellation here and use in Close()
 	reader.readAheadWg.Add(1)
 	go func() {
 		defer reader.readAheadWg.Done()
@@ -90,6 +91,7 @@ func NewFastReader(ctx context.Context, r io.Reader, blockSize int) *FastReader 
 }
 
 func (r *FastReader) Close() {
+	close(r.readAheadDone)
 	r.readAheadWg.Wait()
 }
 
@@ -214,6 +216,8 @@ func (r *FastReader) readAhead(ctx context.Context) {
 		bytes = bytes[:n]
 		select {
 		case r.reads <- read{bytes, err}:
+		case <-r.readAheadDone:
+			return
 		case <-ctx.Done():
 			return
 		}
