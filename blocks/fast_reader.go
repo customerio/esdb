@@ -29,6 +29,7 @@ type FastReader struct {
 	headerLen   int
 	parseHeader func(head []byte) (size uint, encoding int)
 	pool        *sync.Pool
+	readAheadWg sync.WaitGroup
 }
 
 // Any FastReader that uses the defaults will use this allocation pool.
@@ -78,9 +79,18 @@ func NewFastReader(ctx context.Context, r io.Reader, blockSize int) *FastReader 
 		pool:        p,
 	}
 
-	go reader.readAhead(ctx)
+	// TODO: set up some cancellation here and use in Close()
+	reader.readAheadWg.Add(1)
+	go func() {
+		defer reader.readAheadWg.Done()
+		reader.readAhead(ctx)
+	}()
 
 	return reader
+}
+
+func (r *FastReader) Close() {
+	r.readAheadWg.Wait()
 }
 
 // Implements io.Reader interface.
