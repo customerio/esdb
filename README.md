@@ -12,7 +12,7 @@ After investigating strategies for maintaining these events, we enjoyed the
 simple approach of archiving old events into structured flat files which
 provides dead simple backups, restores, and needs no running process to work.
 After investigating current strategies and getting down and dirty with CDB and
-LevelDB, we choose to create ESDB as a stategy dedicated to querying event
+LevelDB, we chose to create ESDB as a strategy dedicated to querying event
 stream data.
 
 *WARNING: version 0.0.00000001. I wrote this in one day as a proof of concept.
@@ -159,9 +159,9 @@ is extremely fast!
 
 2. Secondary indexes for quickly scanning through just a subset of events.
 
-   Scanning though a subset of events is preferable to scanning through the
+   Scanning through a subset of events is preferable to scanning through the
 entire event stream, especially when the event stream contains many events
-which you aren't currently interested. ESDB allows definition of secondary
+which you aren't currently interested in. ESDB allows definition of secondary
 indexes which allow quick retrieval of just events in the index.
    
    Secondary indexes are retrieved in timestamp order, and can be scanned
@@ -169,9 +169,9 @@ forward and backwards.
    
 3. Low overhead.
 
-   Event overhead: as little 3 bytes + 17 bytes for each secondary index for
+   Event overhead: as little as 3 bytes + 17 bytes for each secondary index for
 each event stored. The 17 byte secondary index overhead is only applied for
-indexes which the particular event is apart.
+indexes which the particular event is a part of.
    
    File overhead: offset information based on the number of spaces and
 groupings which are created is maintained at the end of the file. Generally, in
